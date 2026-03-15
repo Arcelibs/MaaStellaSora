@@ -91,3 +91,4 @@
 - 所有新增的台服 pipeline 放在 `assets/resource/tw/pipeline/`
 - 圖片放在 `assets/resource/tw/image/`
 - Python 自定義邏輯放在 `agent/custom/`
+- **Pipeline JSON 禁止使用 `//` 註解**：MaaFramework 使用標準 JSON 解析器，不支援註解語法，會導致「資源加載失敗」。需要留記錄請寫在 CLAUDE.md。
