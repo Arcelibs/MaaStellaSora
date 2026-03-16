@@ -85,17 +85,25 @@ def _normalize_priority_param(param: Any) -> Dict[int, List[str]]:
         param = param.decode("utf-8", errors="replace")
 
     if isinstance(param, str):
-        if not param.strip():
+        param = param.strip()
+        if not param:
             return {}
-        if not param.strip().startswith("{"):
-            # treat as preset filename under agent/presets/
+        if param.startswith("{"):
+            parsed = json.loads(param)
+        else:
+            # MaaFramework may pass the value as a JSON-encoded string (with quotes)
+            # e.g. '"千都世水隊.json"' -> unwrap first
+            filename = param
+            if param.startswith('"'):
+                try:
+                    filename = json.loads(param)
+                except Exception:
+                    pass
             script_dir = os.path.dirname(os.path.abspath(__file__))
-            preset_path = os.path.join(script_dir, "presets", param.strip())
+            preset_path = os.path.join(script_dir, "presets", filename)
             print(f"[auto_tower] loading preset: {preset_path!r}")
             with open(preset_path, "r", encoding="utf-8-sig") as f:
                 parsed = json.load(f)
-        else:
-            parsed = json.loads(param)
     else:
         parsed = param
 

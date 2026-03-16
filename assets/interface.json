@@ -1327,7 +1327,7 @@
                                 "type": "Custom",
                                 "param": {
                                     "custom_recognition": "auto_tower",
-                                    "custom_recognition_param": "千都世水隊.json"
+                                    "custom_recognition_param": "qiandushi-water.json"
                                 }
                             }
                         }
