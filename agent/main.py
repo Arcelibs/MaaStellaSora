@@ -8,6 +8,7 @@ from maa.custom_recognition import CustomRecognition
 from maa.custom_action import CustomAction
 from maa.context import Context
 import json
+from pathlib import Path
 
 
 @AgentServer.custom_recognition("auto_tower")
@@ -21,7 +22,13 @@ class TowerRecongition(CustomRecognition):
 
         config = argv.custom_recognition_param
         print(config)
-        priority_dict = json.loads(config)
+        config = config.strip()
+        if config.startswith("{"):
+            priority_dict = json.loads(config)
+        else:
+            preset_path = Path(__file__).parent / "presets" / config
+            with open(preset_path, "r", encoding="utf-8") as f:
+                priority_dict = json.load(f)
         print(priority_dict)
         # priority_dict = {
         #     "3": [

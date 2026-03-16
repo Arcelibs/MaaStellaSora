@@ -194,6 +194,19 @@
                 "是否开启自定义爬塔",
                 "自定义卡牌优先级"
             ]
+        },
+        {
+            "name": "抄作業爬塔",
+            "entry": "星塔_入口",
+            "description": "使用預設隊伍作業自動選擇Buff，作業檔案存放於 agent/presets/",
+            "repeatable": true,
+            "repeat_count": 1,
+            "option": [
+                "属性塔",
+                "音符购买",
+                "速刷",
+                "爬塔作業"
+            ]
         }
     ],
     "option": {
@@ -1294,6 +1307,29 @@
                             "next": [
                                 "通用_消耗所有干劲"
                             ]
+                        }
+                    }
+                }
+            ]
+        },
+        "爬塔作業": {
+            "type": "select",
+            "label": "選擇爬塔作業",
+            "description": "選擇要套用的隊伍Buff優先級作業，對應檔案在 agent/presets/ 目錄",
+            "default_case": "千都世+蒼蘭+特麗莎（水）",
+            "cases": [
+                {
+                    "name": "千都世+蒼蘭+特麗莎（水）",
+                    "label": "千都世+蒼蘭+特麗莎（水）",
+                    "pipeline_override": {
+                        "星塔_节点_选择buff_推荐": {
+                            "recognition": {
+                                "type": "Custom",
+                                "param": {
+                                    "custom_recognition": "auto_tower",
+                                    "custom_recognition_param": "千都世水隊.json"
+                                }
+                            }
                         }
                     }
                 }
