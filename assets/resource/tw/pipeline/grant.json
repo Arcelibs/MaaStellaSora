@@ -1,4 +1,15 @@
 {
+  "基金_打开基金": {
+    "recognition": {
+      "type": "OCR",
+      "param": {
+        "expected": [
+          "基金"
+        ],
+        "roi": [170, 145, 100, 45]
+      }
+    }
+  },
   "基金_核实是否处于营业目标": {
     "recognition": {
       "param": {
