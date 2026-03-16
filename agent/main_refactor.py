@@ -225,7 +225,6 @@ class TowerRecognition(CustomRecognition):
 
                 print(f"[auto_tower] scanning priority {priority}: {target!r}")
                 reco_detail = _run_expected_ocr(context, argv.image, target)
-                print(f"[auto_tower] result: {reco_detail}")
 
                 if reco_detail and reco_detail.hit and reco_detail.best_result:
                     box = reco_detail.best_result.box
