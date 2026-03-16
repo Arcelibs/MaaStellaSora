@@ -88,9 +88,11 @@ def _normalize_priority_param(param: Any) -> Dict[int, List[str]]:
         if not param.strip():
             return {}
         if not param.strip().startswith("{"):
-            # 視為預設檔案名稱，從 agent/presets/ 讀取
-            preset_path = Path(__file__).parent / "presets" / param.strip()
-            with open(preset_path, "r", encoding="utf-8") as f:
+            # treat as preset filename under agent/presets/
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            preset_path = os.path.join(script_dir, "presets", param.strip())
+            print(f"[auto_tower] loading preset: {preset_path!r}")
+            with open(preset_path, "r", encoding="utf-8-sig") as f:
                 parsed = json.load(f)
         else:
             parsed = json.loads(param)
@@ -204,19 +206,19 @@ class TowerRecognition(CustomRecognition):
                         detail="Task Stopped",
                     )
 
-                print(f"正在识别优先级 {priority} 的目标: {target}")
+                print(f"[auto_tower] scanning priority {priority}: {target!r}")
                 reco_detail = _run_expected_ocr(context, argv.image, target)
-                print(f"识别结果: {reco_detail}")
+                print(f"[auto_tower] result: {reco_detail}")
 
                 if reco_detail and reco_detail.hit and reco_detail.best_result:
                     box = reco_detail.best_result.box
-                    print(f"找到目标 {target}，位置: {box}")
+                    print(f"[auto_tower] found {target!r} at {box}")
                     return CustomRecognition.AnalyzeResult(
                         box=box,
                         detail=f"Found {target} with priority {priority}",
                     )
 
-        print("未找到任何目标，尝试推荐卡片图标")
+        print("[auto_tower] no target found, trying fallback recommend icon")
         reco_detail = _run_fallback_template(context, argv.image)
         if reco_detail and reco_detail.hit and reco_detail.best_result:
             box = reco_detail.best_result.box
