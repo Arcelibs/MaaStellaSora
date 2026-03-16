@@ -192,7 +192,7 @@ class TowerRecognition(CustomRecognition):
         try:
             priority_dict = _normalize_priority_param(argv.custom_recognition_param)
         except Exception as exc:
-            print(f"custom_recognition_param 解析失败: {exc}")
+            print(f"custom_recognition_param parse error: {exc!r}")
             priority_dict = {}
 
         for priority in sorted(priority_dict.keys(), reverse=True):
