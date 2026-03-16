@@ -205,11 +205,14 @@ class TowerRecognition(CustomRecognition):
             print(f"custom_recognition_param parse error: {exc!r}")
             priority_dict = {}
 
-        # Fast pre-check: only scan buffs if the "take" button is visible
-        # (i.e., we're actually on the buff selection screen)
-        reco_take = _run_expected_ocr(context, argv.image, "拿走")
-        if not (reco_take and reco_take.hit and reco_take.best_result):
+        # Pre-check: confirm we're on the buff selection screen by finding the
+        # recommend icon (visible before any card is selected). Also reuse the
+        # result as fallback so we don't have to search again later.
+        reco_recommend = _run_fallback_template(context, argv.image)
+        if not (reco_recommend and reco_recommend.hit and reco_recommend.best_result):
             return CustomRecognition.AnalyzeResult(box=None, detail="not buff selection screen")
+
+        fallback_box = reco_recommend.best_result.box
 
         for priority in sorted(priority_dict.keys(), reverse=True):
             targets = priority_dict[priority]
@@ -232,18 +235,10 @@ class TowerRecognition(CustomRecognition):
                         detail=f"Found {target} with priority {priority}",
                     )
 
-        print("[auto_tower] no target found, trying fallback recommend icon")
-        reco_detail = _run_fallback_template(context, argv.image)
-        if reco_detail and reco_detail.hit and reco_detail.best_result:
-            box = reco_detail.best_result.box
-            return CustomRecognition.AnalyzeResult(
-                box=box,
-                detail="use recommend card",
-            )
-
+        print(f"[auto_tower] no target found, using fallback recommend icon at {fallback_box}")
         return CustomRecognition.AnalyzeResult(
-            box=None,
-            detail="not found",
+            box=fallback_box,
+            detail="use recommend card",
         )
 
 
