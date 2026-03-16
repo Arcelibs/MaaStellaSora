@@ -209,7 +209,7 @@ class TowerRecognition(CustomRecognition):
         # (i.e., we're actually on the buff selection screen)
         reco_take = _run_expected_ocr(context, argv.image, "拿走")
         if not (reco_take and reco_take.hit and reco_take.best_result):
-            return CustomRecognition.AnalyzeResult(box=(0, 0, 0, 0), detail="not buff selection screen")
+            return CustomRecognition.AnalyzeResult(box=None, detail="not buff selection screen")
 
         for priority in sorted(priority_dict.keys(), reverse=True):
             targets = priority_dict[priority]
@@ -242,7 +242,7 @@ class TowerRecognition(CustomRecognition):
             )
 
         return CustomRecognition.AnalyzeResult(
-            box=(0, 0, 0, 0),
+            box=None,
             detail="not found",
         )
 

@@ -1330,6 +1330,19 @@
                                     "custom_recognition_param": "qiandushi-water.json"
                                 }
                             }
+                        },
+                        "星塔_节点_选择buff_拿走": {
+                            "recognition": {
+                                "type": "OCR",
+                                "param": {
+                                    "expected": ["拿走"],
+                                    "roi": [100, 480, 1080, 240]
+                                }
+                            },
+                            "action": {
+                                "type": "Click"
+                            },
+                            "timeout": 3000
                         }
                     }
                 }
