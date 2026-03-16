@@ -1,6 +1,7 @@
 import json
 import sys
 import os
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
 
 # 将agent目录添加到Python搜索路径，以便直接导入custom模块
@@ -86,7 +87,13 @@ def _normalize_priority_param(param: Any) -> Dict[int, List[str]]:
     if isinstance(param, str):
         if not param.strip():
             return {}
-        parsed = json.loads(param)
+        if not param.strip().startswith("{"):
+            # 視為預設檔案名稱，從 agent/presets/ 讀取
+            preset_path = Path(__file__).parent / "presets" / param.strip()
+            with open(preset_path, "r", encoding="utf-8") as f:
+                parsed = json.load(f)
+        else:
+            parsed = json.loads(param)
     else:
         parsed = param
 
