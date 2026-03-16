@@ -205,6 +205,12 @@ class TowerRecognition(CustomRecognition):
             print(f"custom_recognition_param parse error: {exc!r}")
             priority_dict = {}
 
+        # Fast pre-check: only scan buffs if the "take" button is visible
+        # (i.e., we're actually on the buff selection screen)
+        reco_take = _run_expected_ocr(context, argv.image, "拿走")
+        if not (reco_take and reco_take.hit and reco_take.best_result):
+            return CustomRecognition.AnalyzeResult(box=(0, 0, 0, 0), detail="not buff selection screen")
+
         for priority in sorted(priority_dict.keys(), reverse=True):
             targets = priority_dict[priority]
             for target in targets:
