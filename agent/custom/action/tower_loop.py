@@ -152,53 +152,54 @@ class TowerLoopAction(CustomAction):
         if self._hit(context, img, "塔_偵測_等級提升"):
             return "level_up"
 
-        # 4. 對話選項（有多個可選項）
+        # 4. 點選空白關閉（優先於對話選項：取 buff 後的提示可能誤觸對話選項偵測）
+        if self._hit(context, img, "塔_偵測_點選空白"):
+            return "blank_close"
+
+        # 5. 默契提升（同上，優先排除）
+        if self._hit(context, img, "塔_偵測_默契提升"):
+            return "harmony_up"
+
+        # 6. 對話選項（有多個可選項）
         if self._hit(context, img, "塔_偵測_對話選項"):
             return "dialogue_option"
 
-        # 5. 保存紀錄（點擊但不退出迴圈）
+        # 7. 保存紀錄（點擊但不退出迴圈）
         if self._hit(context, img, "塔_偵測_保存紀錄"):
             return "save_record"
 
-        # 6. 商店節點選擇畫面（優先於上樓/強化，避免在商店選擇畫面直接點上樓）
+        # 8. 商店節點選擇畫面（優先於上樓/強化，避免在商店選擇畫面直接點上樓）
         #    已購物後由旗標保護，不會重複進入
         if not self._shop_done_this_room and self._hit(context, img, "塔_偵測_商店節點"):
             return "shop_node"
 
-        # 7. 商店主界面（格子購物視圖）
+        # 9. 商店主界面（格子購物視圖）
         if self._hit(context, img, "塔_偵測_商店主界面"):
             return "shop_main"
 
-        # 8. 強化可用（免費或 ≤180 幣）—— 購物完成後才處理，已強化則跳過
+        # 10. 強化可用（免費或 ≤180 幣）—— 購物完成後才處理，已強化則跳過
         if not self._strengthen_done_this_room and self._hit(context, img, "塔_偵測_強化可用"):
             return "strengthen_available"
 
-        # 9. 上樓（商店/強化完成後前往下一層）
+        # 11. 上樓（商店/強化完成後前往下一層）
         if self._hit(context, img, "塔_偵測_上樓"):
             return "go_up"
 
-        # 10. 最終商店離開星塔
+        # 12. 最終商店離開星塔
         if self._hit(context, img, "塔_偵測_最終離開"):
             return "final_leave"
 
-        # 11. 強化選卡畫面（潛能卡片選擇）
+        # 13. 強化選卡畫面（潛能卡片選擇）
         if self._hit(context, img, "塔_偵測_強化選卡"):
             return "strengthen_card"
 
-        # 12. 對話泡泡（點擊繼續）
+        # 14. 對話泡泡（點擊繼續）
         if self._hit(context, img, "星塔_节点_对话"):
             return "dialogue"
 
-        # 13. 突發事件選項（藍色圓圈按鈕圖示，非預設對話選項的隨機事件）
+        # 15. 突發事件選項（藍色圓圈按鈕圖示，非預設對話選項的隨機事件）
         if self._hit(context, img, "塔_偵測_突發事件"):
             return "dialogue_ignore"
-
-        # 14. 點選空白關閉 / 默契提升
-        if self._hit(context, img, "塔_偵測_點選空白"):
-            return "blank_close"
-
-        if self._hit(context, img, "塔_偵測_默契提升"):
-            return "harmony_up"
 
         return "unknown"
 
@@ -474,4 +475,4 @@ class TowerLoopAction(CustomAction):
         if result and result.hit and result.best_result:
             cx, cy = _box_center(result.best_result.box)
             context.tasker.controller.post_click(cx, cy).wait()
-            time.sleep(1.0)  # 等選項消失 / 對話推進
+            time.sleep(0.5)  # 對話選項通常快速響應，多頁劇情也能快速點完
