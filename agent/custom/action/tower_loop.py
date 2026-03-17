@@ -360,17 +360,21 @@ class TowerLoopAction(CustomAction):
 
     def _handle_shop_main(self, context: Context, img):
         """商店主界面：掃描 8 格，買有折扣的 buff / 音符。"""
+        shop_closed_early = False
         for grid_idx, roi in _GRID_ROIS.items():
             # 每格前重新截圖，確認仍在商店主界面
             current_img = context.tasker.controller.post_screencap().wait().get()
             if not self._hit(context, current_img, "塔_偵測_商店主界面"):
                 print(f"[tower_loop] shop main gone at grid {grid_idx}")
+                shop_closed_early = True
                 break
             self._process_grid(context, grid_idx, roi)
 
-        # 處理完所有格子後，點返回鍵離開商店主界面
-        time.sleep(0.3)
-        self._exit_shop_main(context)
+        # 若商店已自動關閉（購買動畫 / 購買後跳回），交由主迴圈處理後續狀態
+        # 若仍在商店界面，才主動按返回退出
+        if not shop_closed_early:
+            time.sleep(0.3)
+            self._exit_shop_main(context)
 
     def _process_grid(self, context: Context, grid_idx: int, roi: List[int]):
         """點擊一個商店格子，判斷是否購買。"""
@@ -421,12 +425,16 @@ class TowerLoopAction(CustomAction):
         if result and result.hit and result.best_result:
             cx, cy = _box_center(result.best_result.box)
             context.tasker.controller.post_click(cx, cy).wait()
-            time.sleep(0.5)
+            time.sleep(1.0)  # 等購買動畫完成（原 0.5 不夠）
             # 確認沒有錢不夠的彈窗
             img2 = context.tasker.controller.post_screencap().wait().get()
             if self._hit(context, img2, "塔_商店_錢不夠"):
                 context.tasker.controller.post_click(640, 400).wait()
                 time.sleep(0.3)
+            elif self._hit(context, img2, "塔_偵測_點選空白"):
+                # 購買後出現「點選空白處繼續」提示（如拿到新 buff 時）
+                self._click_hit(context, img2, "塔_偵測_點選空白")
+                time.sleep(0.8)
 
     def _close_detail(self, context: Context, img):
         """關閉格子詳情面板。"""
