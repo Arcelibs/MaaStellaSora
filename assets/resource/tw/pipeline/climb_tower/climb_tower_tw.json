@@ -363,7 +363,7 @@
         "recognition": {
             "type": "OCR",
             "param": {
-                "expected": ["確認"],
+                "expected": ["確認", "确认", "確.?認"],
                 "roi": [450, 460, 500, 200]
             }
         },

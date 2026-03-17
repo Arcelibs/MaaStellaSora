@@ -118,7 +118,15 @@ class TowerLoopAction(CustomAction):
             if state in ("tower_complete", "leave_confirm"):
                 if state == "leave_confirm":
                     print("[tower_loop] leave confirm dialog, clicking 確認")
-                    self._click_hit(context, img, "塔_偵測_確認按鈕")
+                    confirm = context.run_recognition("塔_偵測_確認按鈕", img)
+                    if confirm and confirm.hit and confirm.best_result:
+                        cx, cy = _box_center(confirm.best_result.box)
+                        context.tasker.controller.post_click(cx, cy).wait()
+                        print(f"[tower_loop] 確認 clicked at ({cx}, {cy})")
+                    else:
+                        # OCR 失敗（簡繁不同或字體問題）→ 固定座標點右側按鈕
+                        print("[tower_loop] 確認 OCR failed, fallback click (875, 601)")
+                        context.tasker.controller.post_click(875, 601).wait()
                     time.sleep(2.0)
                 else:
                     print("[tower_loop] tower complete, done")
