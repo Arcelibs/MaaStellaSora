@@ -404,8 +404,8 @@ class TowerLoopAction(CustomAction):
             if shop_closed_early:
                 return  # 商店已自動關閉，交由主迴圈處理
 
-            # 本輪掃完：有買到東西才嘗試重置（沒幣時買不到，不重置）
-            if reroll_round < 2 and items_bought > 0 and self._try_reroll_shop(context):
+            # 本輪掃完：嘗試重置（幣帶不走，積極花）
+            if reroll_round < 2 and self._try_reroll_shop(context):
                 print(f"[tower_loop] shop rerolled (round {reroll_round + 1}, bought {items_bought})")
                 time.sleep(1.5)  # 等重置動畫
             else:
@@ -418,11 +418,6 @@ class TowerLoopAction(CustomAction):
     def _try_reroll_shop(self, context: Context) -> bool:
         """嘗試點擊商店重置按鈕。若成功回傳 True，無法重置回傳 False。"""
         img = context.tasker.controller.post_screencap().wait().get()
-
-        # 幣數不足 1000 時不重置，節省重置次數留給後期
-        if not self._hit(context, img, "塔_商店_幣數千以上"):
-            print("[tower_loop] reroll skipped: coins < 1000")
-            return False
 
         result = context.run_recognition("塔_商店_重置按鈕", img)
         if not (result and result.hit and result.best_result):
@@ -466,26 +461,26 @@ class TowerLoopAction(CustomAction):
             print(f"[tower_loop] grid {grid_idx}: no detail panel")
             return False
 
-        has_discount = self._hit(context, img, "塔_商店_優惠")
         is_buff = self._hit(context, img, "塔_商店_buff類型")
         is_note = (not is_buff) and self._hit(context, img, "塔_商店_音符類型")
 
-        # 幣 ≥1500：buff 不管有沒有折扣都買
-        rich = self._hit(context, img, "塔_商店_幣數千五以上")
+        if is_buff:
+            # buff 類（潛能特飲等）：永遠值得買
+            print(f"[tower_loop] grid {grid_idx}: buff, buying")
+            self._do_buy(context)
+            return True
 
-        if is_buff and (has_discount or rich):
-            tag = "rich+no-discount" if (rich and not has_discount) else "discounted"
-            print(f"[tower_loop] grid {grid_idx}: buff ({tag}), buying")
+        if is_note:
+            # 音符類：不管有沒有激活或折扣，全部買（幣帶不走，花完才對）
+            is_activated = self._hit(context, img, "塔_商店_音符激活")
+            has_discount = self._hit(context, img, "塔_商店_優惠")
+            print(f"[tower_loop] grid {grid_idx}: note (activated={is_activated}, discount={has_discount}), buying")
             self._do_buy(context)
             return True
-        elif is_note and has_discount and self._hit(context, img, "塔_商店_音符激活"):
-            print(f"[tower_loop] grid {grid_idx}: discounted activated note, buying")
-            self._do_buy(context)
-            return True
-        else:
-            print(f"[tower_loop] grid {grid_idx}: skip (buff={is_buff}, note={is_note}, discount={has_discount}, rich={rich})")
-            self._close_detail(context, img)
-            return False
+
+        print(f"[tower_loop] grid {grid_idx}: skip (not buff or note)")
+        self._close_detail(context, img)
+        return False
 
     def _do_buy(self, context: Context):
         """點擊購買確認按鈕。"""
