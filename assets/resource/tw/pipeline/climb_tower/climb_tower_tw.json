@@ -303,6 +303,30 @@
         "action": {"type": "DoNothing"}
     },
 
+    "塔_商店_重置按鈕": {
+        "recognition": {
+            "type": "TemplateMatch",
+            "param": {
+                "template": [
+                    "ClimbTower/爬塔_商店刷新按钮__1199_609_45_41__1149_559_131_141.png"
+                ],
+                "roi": [970, 533, 290, 143]
+            }
+        },
+        "action": {"type": "DoNothing"}
+    },
+
+    "塔_商店_無法重置": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": ["無法"],
+                "roi": [528, 99, 315, 86]
+            }
+        },
+        "action": {"type": "DoNothing"}
+    },
+
     "塔_偵測_突發事件": {
         "recognition": {
             "type": "TemplateMatch",

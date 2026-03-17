@@ -364,22 +364,52 @@ class TowerLoopAction(CustomAction):
         time.sleep(2.0)  # 等商店主界面打開
 
     def _handle_shop_main(self, context: Context, img):
-        """商店主界面：掃描 8 格，買有折扣的 buff / 音符。"""
-        shop_closed_early = False
-        for grid_idx, roi in _GRID_ROIS.items():
-            # 每格前重新截圖，確認仍在商店主界面
-            current_img = context.tasker.controller.post_screencap().wait().get()
-            if not self._hit(context, current_img, "塔_偵測_商店主界面"):
-                print(f"[tower_loop] shop main gone at grid {grid_idx}")
-                shop_closed_early = True
-                break
-            self._process_grid(context, grid_idx, roi)
+        """商店主界面：掃描 8 格，買有折扣的 buff / 音符；幣多則重置繼續買。"""
+        for reroll_round in range(3):  # 最多原始 + 2 次重置
+            shop_closed_early = False
+            for grid_idx, roi in _GRID_ROIS.items():
+                # 每格前重新截圖，確認仍在商店主界面
+                current_img = context.tasker.controller.post_screencap().wait().get()
+                if not self._hit(context, current_img, "塔_偵測_商店主界面"):
+                    print(f"[tower_loop] shop main gone at grid {grid_idx}")
+                    shop_closed_early = True
+                    break
+                self._process_grid(context, grid_idx, roi)
 
-        # 若商店已自動關閉（購買動畫 / 購買後跳回），交由主迴圈處理後續狀態
-        # 若仍在商店界面，才主動按返回退出
-        if not shop_closed_early:
+            if shop_closed_early:
+                return  # 商店已自動關閉，交由主迴圈處理
+
+            # 本輪掃完：嘗試重置
+            if reroll_round < 2 and self._try_reroll_shop(context):
+                print(f"[tower_loop] shop rerolled (round {reroll_round + 1})")
+                time.sleep(1.5)  # 等重置動畫
+            else:
+                break  # 無法重置或已達上限，結束
+
+        time.sleep(0.5)
+        self._exit_shop_main(context)
+
+    def _try_reroll_shop(self, context: Context) -> bool:
+        """嘗試點擊商店重置按鈕。若成功回傳 True，無法重置回傳 False。"""
+        img = context.tasker.controller.post_screencap().wait().get()
+        result = context.run_recognition("塔_商店_重置按鈕", img)
+        if not (result and result.hit and result.best_result):
+            print("[tower_loop] reroll button not found, skip")
+            return False
+
+        cx, cy = _box_center(result.best_result.box)
+        context.tasker.controller.post_click(cx, cy).wait()
+        time.sleep(1.0)
+
+        # 檢查是否出現「無法重置」或「錢不夠」彈窗
+        img2 = context.tasker.controller.post_screencap().wait().get()
+        if self._hit(context, img2, "塔_商店_無法重置") or self._hit(context, img2, "塔_商店_錢不夠"):
+            print("[tower_loop] reroll failed (no coins or no rerolls left)")
+            context.tasker.controller.post_click(640, 400).wait()
             time.sleep(0.5)
-            self._exit_shop_main(context)
+            return False
+
+        return True
 
     def _process_grid(self, context: Context, grid_idx: int, roi: List[int]):
         """點擊一個商店格子，判斷是否購買。"""
