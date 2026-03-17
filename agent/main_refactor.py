@@ -4,6 +4,12 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
 
+# Force UTF-8 output so Traditional Chinese characters are logged correctly
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 # 将agent目录添加到Python搜索路径，以便直接导入custom模块
 current_file_path = os.path.abspath(__file__)
 current_script_dir = os.path.dirname(current_file_path)  # agent目录
