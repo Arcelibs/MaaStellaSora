@@ -1315,34 +1315,21 @@
         "爬塔作業": {
             "type": "select",
             "label": "選擇爬塔作業",
-            "description": "選擇要套用的隊伍Buff優先級作業，對應檔案在 agent/presets/ 目錄",
+            "description": "選擇要套用的隊伍Buff優先級作業，對應檔案在 agent/presets/ 目錄（台服專用，需配合 tower_loop agent）",
             "default_case": "千都世+蒼蘭+特麗莎（水）",
             "cases": [
                 {
                     "name": "千都世+蒼蘭+特麗莎（水）",
                     "label": "千都世+蒼蘭+特麗莎（水）",
                     "pipeline_override": {
-                        "星塔_节点_选择buff_推荐": {
-                            "recognition": {
+                        "星塔_爬塔流程": {
+                            "action": {
                                 "type": "Custom",
                                 "param": {
-                                    "custom_recognition": "auto_tower",
-                                    "custom_recognition_param": "qiandushi-water.json"
+                                    "custom_action": "tower_loop",
+                                    "custom_action_param": "qiandushi-water.json"
                                 }
                             }
-                        },
-                        "星塔_节点_选择buff_拿走": {
-                            "recognition": {
-                                "type": "OCR",
-                                "param": {
-                                    "expected": ["拿走"],
-                                    "roi": [100, 480, 1080, 240]
-                                }
-                            },
-                            "action": {
-                                "type": "Click"
-                            },
-                            "timeout": 3000
                         }
                     }
                 }

@@ -1,0 +1,303 @@
+{
+    "星塔_爬塔流程": {
+        "recognition": {
+            "type": "DirectHit"
+        },
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "tower_loop",
+                "custom_action_param": ""
+            }
+        },
+        "next": []
+    },
+
+    "塔_偵測_完成": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": ["探索完成", "當前房間", "收集潛能"],
+                "roi": [449, 219, 399, 302]
+            }
+        },
+        "action": {"type": "DoNothing"}
+    },
+
+    "塔_偵測_buff選擇": {
+        "recognition": {
+            "type": "TemplateMatch",
+            "param": {
+                "template": [
+                    "ClimbTower/爬塔_buff推荐图标1__146_389_43_44__96_339_143_144.png"
+                ],
+                "green_mask": true,
+                "threshold": 0.6
+            }
+        },
+        "action": {"type": "DoNothing"},
+        "timeout": 1000
+    },
+
+    "塔_偵測_等級提升": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": ["等級提升"],
+                "roi": [474, 2, 338, 98]
+            }
+        },
+        "action": {"type": "DoNothing"},
+        "timeout": 2000
+    },
+
+    "塔_偵測_對話選項": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": [
+                    "試試", "12點", "認真執行", "志存高遠", "總是如此",
+                    "6個", "多吃蔬菜", "少久坐", "12個", "今朝有酒",
+                    "忠於欲望", "1024", "亮燈吧", "我傾聽所有", "互相幫助",
+                    "會贏的", "需要力量", "試一下吧", "隨心所欲", "合作無間"
+                ],
+                "roi": [350, 151, 870, 475]
+            }
+        },
+        "action": {"type": "DoNothing"},
+        "timeout": 1000
+    },
+
+    "塔_偵測_保存紀錄": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": ["保存紀錄"],
+                "roi": [1076, 623, 135, 57]
+            }
+        },
+        "action": {"type": "DoNothing"}
+    },
+
+    "塔_偵測_商店節點": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": ["商店購物"],
+                "roi": [395, 243, 338, 98]
+            }
+        },
+        "action": {"type": "DoNothing"}
+    },
+
+    "塔_偵測_商店主界面": {
+        "recognition": {
+            "type": "TemplateMatch",
+            "param": {
+                "template": [
+                    "ClimbTower/爬塔_商店主界面__442_338_66_145__392_288_166_245.png"
+                ],
+                "roi": [210, 168, 550, 468]
+            }
+        },
+        "action": {"type": "DoNothing"}
+    },
+
+    "塔_偵測_強化可用": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": [
+                    "免費",
+                    "(^|[^0-9])([6-9][0-9]|1[0-9]{2})([^0-9]|$)"
+                ],
+                "roi": [347, 357, 435, 93]
+            }
+        },
+        "action": {"type": "DoNothing"}
+    },
+
+    "塔_偵測_上樓": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": ["上樓"],
+                "roi": [421, 487, 287, 59]
+            }
+        },
+        "action": {"type": "DoNothing"}
+    },
+
+    "塔_偵測_最終離開": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": ["離開星塔"],
+                "roi": [421, 487, 287, 59]
+            }
+        },
+        "action": {"type": "DoNothing"}
+    },
+
+    "塔_偵測_強化選卡": {
+        "recognition": {
+            "type": "TemplateMatch",
+            "param": {
+                "template": [
+                    "ClimbTower/爬塔_buff推荐图标1__146_389_43_44__96_339_143_144.png"
+                ],
+                "green_mask": true,
+                "threshold": 0.6
+            }
+        },
+        "action": {"type": "DoNothing"},
+        "timeout": 1000
+    },
+
+    "塔_偵測_點選空白": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": ["點選空白", "處繼續", "處關閉"],
+                "roi": [471, 486, 335, 216]
+            }
+        },
+        "action": {"type": "DoNothing"},
+        "timeout": 1000
+    },
+
+    "塔_偵測_默契提升": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": ["默契", "提升"],
+                "roi": [786, 143, 257, 102]
+            }
+        },
+        "action": {"type": "DoNothing"}
+    },
+
+    "塔_OCR_卡牌區域": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [0, 350, 1280, 250]
+            }
+        },
+        "action": {"type": "DoNothing"}
+    },
+
+    "塔_OCR_拿走": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": ["拿走"],
+                "roi": [100, 480, 1080, 240]
+            }
+        },
+        "action": {"type": "DoNothing"},
+        "timeout": 3000
+    },
+
+    "塔_商店_售罄": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": ["售罄"],
+                "roi": [548, 106, 181, 76]
+            }
+        },
+        "action": {"type": "DoNothing"}
+    },
+
+    "塔_商店_錢不夠": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": ["沒有足夠的"],
+                "roi": [518, 95, 213, 89]
+            }
+        },
+        "action": {"type": "DoNothing"}
+    },
+
+    "塔_商店_購買按鈕": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": ["購買"],
+                "roi": [355, 170, 70, 39]
+            }
+        },
+        "action": {"type": "DoNothing"}
+    },
+
+    "塔_商店_優惠": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": ["優惠"],
+                "roi": [339, 215, 612, 353]
+            }
+        },
+        "action": {"type": "DoNothing"}
+    },
+
+    "塔_商店_buff類型": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": ["可獲得新潛能"],
+                "roi": [339, 215, 612, 353]
+            }
+        },
+        "action": {"type": "DoNothing"}
+    },
+
+    "塔_商店_音符類型": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": ["的音符"],
+                "roi": [339, 215, 612, 353]
+            }
+        },
+        "action": {"type": "DoNothing"}
+    },
+
+    "塔_商店_音符激活": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": ["協奏", "相關", "技能"],
+                "roi": [32, 15, 165, 43]
+            }
+        },
+        "action": {"type": "DoNothing"}
+    },
+
+    "塔_商店_購買確認": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": ["購買"],
+                "roi": [602, 493, 98, 52]
+            }
+        },
+        "action": {"type": "DoNothing"},
+        "timeout": 2000
+    },
+
+    "塔_商店_關閉按鈕": {
+        "recognition": {
+            "type": "TemplateMatch",
+            "param": {
+                "template": [
+                    "ClimbTower/星塔_格子_关闭__917_174_38_35__867_124_138_135.png"
+                ],
+                "roi": [304, 164, 671, 418]
+            }
+        },
+        "action": {"type": "DoNothing"}
+    }
+}
