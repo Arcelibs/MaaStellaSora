@@ -471,14 +471,18 @@ class TowerLoopAction(CustomAction):
             return True
 
         if is_note:
-            # 音符類：不管有沒有激活或折扣，全部買（幣帶不走，花完才對）
+            # 音符類：只買已激活（與隊伍相關）的音符；未激活的沒有效益，跳過
             is_activated = self._hit(context, img, "塔_商店_音符激活")
-            has_discount = self._hit(context, img, "塔_商店_優惠")
-            print(f"[tower_loop] grid {grid_idx}: note (activated={is_activated}, discount={has_discount}), buying")
-            self._do_buy(context)
-            return True
+            if is_activated:
+                print(f"[tower_loop] grid {grid_idx}: activated note, buying")
+                self._do_buy(context)
+                return True
+            else:
+                print(f"[tower_loop] grid {grid_idx}: unactivated note, skip")
 
-        print(f"[tower_loop] grid {grid_idx}: skip (not buff or note)")
+        else:
+            print(f"[tower_loop] grid {grid_idx}: skip (not buff or note)")
+
         self._close_detail(context, img)
         return False
 
