@@ -252,6 +252,7 @@ class TowerLoopAction(CustomAction):
 
         elif state == "blank_close":
             self._click_hit(context, img, "塔_偵測_點選空白")
+            time.sleep(0.8)
 
         elif state == "dialogue_ignore":
             # 突發事件：點擊偵測到的選項按鈕（預設點到最後一個「算了」類選項較安全）
@@ -260,6 +261,7 @@ class TowerLoopAction(CustomAction):
 
         elif state == "harmony_up":
             self._click_hit(context, img, "塔_偵測_默契提升")
+            time.sleep(0.8)
 
     def _click_hit(self, context: Context, img, node: str):
         """偵測節點並點擊命中位置的中心。"""
