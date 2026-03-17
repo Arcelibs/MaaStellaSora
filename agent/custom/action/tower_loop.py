@@ -410,6 +410,12 @@ class TowerLoopAction(CustomAction):
     def _try_reroll_shop(self, context: Context) -> bool:
         """嘗試點擊商店重置按鈕。若成功回傳 True，無法重置回傳 False。"""
         img = context.tasker.controller.post_screencap().wait().get()
+
+        # 幣數不足 1000 時不重置，節省重置次數留給後期
+        if not self._hit(context, img, "塔_商店_幣數千以上"):
+            print("[tower_loop] reroll skipped: coins < 1000")
+            return False
+
         result = context.run_recognition("塔_商店_重置按鈕", img)
         if not (result and result.hit and result.best_result):
             print("[tower_loop] reroll button not found, skip")

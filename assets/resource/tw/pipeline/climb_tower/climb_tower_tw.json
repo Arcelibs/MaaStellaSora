@@ -302,6 +302,17 @@
         "action": {"type": "DoNothing"}
     },
 
+    "塔_商店_幣數千以上": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": ["[1-9][0-9,]{3,}"],
+                "roi": [1100, 40, 180, 45]
+            }
+        },
+        "action": {"type": "DoNothing"}
+    },
+
     "塔_商店_重置按鈕": {
         "recognition": {
             "type": "TemplateMatch",
