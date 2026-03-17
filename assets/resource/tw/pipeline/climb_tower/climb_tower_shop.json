@@ -149,7 +149,7 @@
   "星塔_节点_商店_购物_格子_buff": {
     "recognition": {
       "param": {
-        "expected": ["能夠獲得新潛能"]
+        "expected": ["可獲得新潛能"]
       }
     }
   },
