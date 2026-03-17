@@ -462,21 +462,20 @@ class TowerLoopAction(CustomAction):
         is_buff = self._hit(context, img, "塔_商店_buff類型")
         is_note = (not is_buff) and self._hit(context, img, "塔_商店_音符類型")
 
-        if not has_discount:
-            print(f"[tower_loop] grid {grid_idx}: no discount, skip")
-            self._close_detail(context, img)
-            return False
+        # 幣 ≥1500：buff 不管有沒有折扣都買
+        rich = self._hit(context, img, "塔_商店_幣數千五以上")
 
-        if is_buff:
-            print(f"[tower_loop] grid {grid_idx}: discounted buff, buying")
+        if is_buff and (has_discount or rich):
+            tag = "rich+no-discount" if (rich and not has_discount) else "discounted"
+            print(f"[tower_loop] grid {grid_idx}: buff ({tag}), buying")
             self._do_buy(context)
             return True
-        elif is_note and self._hit(context, img, "塔_商店_音符激活"):
+        elif is_note and has_discount and self._hit(context, img, "塔_商店_音符激活"):
             print(f"[tower_loop] grid {grid_idx}: discounted activated note, buying")
             self._do_buy(context)
             return True
         else:
-            print(f"[tower_loop] grid {grid_idx}: item not eligible, skip")
+            print(f"[tower_loop] grid {grid_idx}: skip (buff={is_buff}, note={is_note}, discount={has_discount}, rich={rich})")
             self._close_detail(context, img)
             return False
 
