@@ -124,7 +124,7 @@ class TowerLoopAction(CustomAction):
                 if consecutive_unknown >= self.MAX_UNKNOWN:
                     print(f"[tower_loop] {self.MAX_UNKNOWN}x unknown, assuming done")
                     return True
-                time.sleep(0.5)
+                time.sleep(1.0)  # 等待畫面過渡
                 continue
 
             consecutive_unknown = 0
@@ -216,6 +216,7 @@ class TowerLoopAction(CustomAction):
 
         elif state == "level_up":
             self._click_hit(context, img, "塔_偵測_等級提升")
+            time.sleep(1.0)  # 等級提升動畫
 
         elif state == "dialogue_option":
             self._handle_dialogue_option(context, img)
@@ -223,11 +224,12 @@ class TowerLoopAction(CustomAction):
         elif state == "save_record":
             # 點存檔但繼續跑（修正原 bug）
             self._click_hit(context, img, "塔_偵測_保存紀錄")
+            time.sleep(0.8)
 
         elif state == "strengthen_available":
             self._strengthen_done_this_room = True  # 點了就標記，避免無限迴圈
             self._click_hit(context, img, "塔_偵測_強化可用")
-            time.sleep(0.5)
+            time.sleep(1.5)  # 等強化選卡 UI 打開
 
         elif state == "strengthen_card":
             self._handle_strengthen_card(context, img, priority_dict)
@@ -236,11 +238,11 @@ class TowerLoopAction(CustomAction):
             self._shop_done_this_room = False      # 進入下一層，重置旗標
             self._strengthen_done_this_room = False
             self._click_hit(context, img, "塔_偵測_上樓")
-            time.sleep(1.0)
+            time.sleep(2.0)  # 換層動畫較長
 
         elif state == "final_leave":
             self._click_hit(context, img, "塔_偵測_最終離開")
-            time.sleep(1.0)
+            time.sleep(2.0)
 
         elif state == "shop_node":
             self._handle_shop_node(context, img)
@@ -251,20 +253,20 @@ class TowerLoopAction(CustomAction):
 
         elif state == "dialogue":
             self._click_hit(context, img, "星塔_节点_对话")
-            time.sleep(0.3)
+            time.sleep(1.0)  # 等對話動畫
 
         elif state == "blank_close":
             self._click_hit(context, img, "塔_偵測_點選空白")
-            time.sleep(0.8)
+            time.sleep(1.0)  # 等提示消失
 
         elif state == "dialogue_ignore":
-            # 突發事件：點擊偵測到的選項按鈕（預設點到最後一個「算了」類選項較安全）
+            # 突發事件：點擊偵測到的選項按鈕
             self._click_hit(context, img, "塔_偵測_突發事件")
-            time.sleep(0.5)
+            time.sleep(1.0)
 
         elif state == "harmony_up":
             self._click_hit(context, img, "塔_偵測_默契提升")
-            time.sleep(0.8)
+            time.sleep(1.0)
 
     def _click_hit(self, context: Context, img, node: str):
         """偵測節點並點擊命中位置的中心。"""
@@ -336,7 +338,7 @@ class TowerLoopAction(CustomAction):
 
         cx, cy = _box_center(target_box)
         context.tasker.controller.post_click(cx, cy).wait()
-        time.sleep(0.8)  # 等選卡動畫完成（原 0.4 太短）
+        time.sleep(1.0)  # 等選卡高亮動畫完成
 
         # 點拿走
         img2 = context.tasker.controller.post_screencap().wait().get()
@@ -345,12 +347,11 @@ class TowerLoopAction(CustomAction):
             cx2, cy2 = _box_center(take.best_result.box)
             context.tasker.controller.post_click(cx2, cy2).wait()
             print("[tower_loop] 拿走 clicked")
-            time.sleep(0.5)
         else:
-            # 退一步：直接點「拿走」按鈕的固定座標（左下 1/4 區域中央）
+            # 退一步：直接點「拿走」按鈕的固定座標
             print("[tower_loop] 拿走 not found, fallback click at fixed position")
             context.tasker.controller.post_click(335, 710).wait()
-            time.sleep(0.5)
+        time.sleep(1.5)  # 等取得 buff 動畫完成
 
     # ──────────────────────────────────────────────────────────────
     # 商店
@@ -359,7 +360,7 @@ class TowerLoopAction(CustomAction):
     def _handle_shop_node(self, context: Context, img):
         """商店節點選擇畫面：點「商店購物」進入購物。"""
         self._click_hit(context, img, "塔_偵測_商店節點")
-        time.sleep(1.5)
+        time.sleep(2.0)  # 等商店主界面打開
 
     def _handle_shop_main(self, context: Context, img):
         """商店主界面：掃描 8 格，買有折扣的 buff / 音符。"""
@@ -376,14 +377,14 @@ class TowerLoopAction(CustomAction):
         # 若商店已自動關閉（購買動畫 / 購買後跳回），交由主迴圈處理後續狀態
         # 若仍在商店界面，才主動按返回退出
         if not shop_closed_early:
-            time.sleep(0.3)
+            time.sleep(0.5)
             self._exit_shop_main(context)
 
     def _process_grid(self, context: Context, grid_idx: int, roi: List[int]):
         """點擊一個商店格子，判斷是否購買。"""
         cx, cy = roi[0] + roi[2] // 2, roi[1] + roi[3] // 2
         context.tasker.controller.post_click(cx, cy).wait()
-        time.sleep(0.5)
+        time.sleep(0.8)  # 等詳情面板滑入
 
         img = context.tasker.controller.post_screencap().wait().get()
 
@@ -428,16 +429,16 @@ class TowerLoopAction(CustomAction):
         if result and result.hit and result.best_result:
             cx, cy = _box_center(result.best_result.box)
             context.tasker.controller.post_click(cx, cy).wait()
-            time.sleep(1.0)  # 等購買動畫完成（原 0.5 不夠）
-            # 確認沒有錢不夠的彈窗
+            time.sleep(1.5)  # 等購買動畫完成
+            # 確認後可能出現的彈窗
             img2 = context.tasker.controller.post_screencap().wait().get()
             if self._hit(context, img2, "塔_商店_錢不夠"):
                 context.tasker.controller.post_click(640, 400).wait()
-                time.sleep(0.3)
+                time.sleep(0.5)
             elif self._hit(context, img2, "塔_偵測_點選空白"):
                 # 購買後出現「點選空白處繼續」提示（如拿到新 buff 時）
                 self._click_hit(context, img2, "塔_偵測_點選空白")
-                time.sleep(0.8)
+                time.sleep(1.0)
 
     def _close_detail(self, context: Context, img):
         """關閉格子詳情面板。"""
@@ -448,7 +449,7 @@ class TowerLoopAction(CustomAction):
         else:
             # 備用：點空白區域
             context.tasker.controller.post_click(471 + 335 // 2, 486 + 216 // 2).wait()
-        time.sleep(0.3)
+        time.sleep(0.6)  # 等詳情面板收起
 
     def _exit_shop_main(self, context: Context):
         """從商店主界面返回選擇畫面。"""
@@ -457,11 +458,11 @@ class TowerLoopAction(CustomAction):
         if result and result.hit and result.best_result:
             cx, cy = _box_center(result.best_result.box)
             context.tasker.controller.post_click(cx, cy).wait()
-            time.sleep(1.5)
+            time.sleep(2.0)  # 等返回動畫
             return
         # 備用：點左上角返回箭頭的固定座標
         context.tasker.controller.post_click(50, 35).wait()
-        time.sleep(1.5)
+        time.sleep(2.0)
 
     # ──────────────────────────────────────────────────────────────
     # 對話選項
@@ -473,4 +474,4 @@ class TowerLoopAction(CustomAction):
         if result and result.hit and result.best_result:
             cx, cy = _box_center(result.best_result.box)
             context.tasker.controller.post_click(cx, cy).wait()
-            time.sleep(0.3)
+            time.sleep(1.0)  # 等選項消失 / 對話推進
