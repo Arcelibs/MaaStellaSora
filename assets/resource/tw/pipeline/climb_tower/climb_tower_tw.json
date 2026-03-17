@@ -192,7 +192,7 @@
             "type": "OCR",
             "param": {
                 "expected": ["拿走"],
-                "roi": [100, 480, 1080, 240]
+                "roi": [100, 460, 1080, 270]
             }
         },
         "action": {"type": "DoNothing"},

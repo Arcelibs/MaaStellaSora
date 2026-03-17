@@ -336,7 +336,7 @@ class TowerLoopAction(CustomAction):
 
         cx, cy = _box_center(target_box)
         context.tasker.controller.post_click(cx, cy).wait()
-        time.sleep(0.4)
+        time.sleep(0.8)  # 等選卡動畫完成（原 0.4 太短）
 
         # 點拿走
         img2 = context.tasker.controller.post_screencap().wait().get()
@@ -347,7 +347,10 @@ class TowerLoopAction(CustomAction):
             print("[tower_loop] 拿走 clicked")
             time.sleep(0.5)
         else:
-            print("[tower_loop] 拿走 not found after card click!")
+            # 退一步：直接點「拿走」按鈕的固定座標（左下 1/4 區域中央）
+            print("[tower_loop] 拿走 not found, fallback click at fixed position")
+            context.tasker.controller.post_click(335, 710).wait()
+            time.sleep(0.5)
 
     # ──────────────────────────────────────────────────────────────
     # 商店
