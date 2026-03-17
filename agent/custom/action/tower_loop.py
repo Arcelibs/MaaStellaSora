@@ -103,7 +103,8 @@ class TowerLoopAction(CustomAction):
 
         start = time.time()
         consecutive_unknown = 0
-        self._shop_done_this_room = False  # 每次 run() 重置
+        self._shop_done_this_room = False      # 每次 run() 重置
+        self._strengthen_done_this_room = False
 
         while not context.tasker.stopping:
             if time.time() - start > self.TIMEOUT:
@@ -168,8 +169,8 @@ class TowerLoopAction(CustomAction):
         if self._hit(context, img, "塔_偵測_商店主界面"):
             return "shop_main"
 
-        # 8. 強化可用（免費或 ≤180 幣）—— 購物完成後才處理
-        if self._hit(context, img, "塔_偵測_強化可用"):
+        # 8. 強化可用（免費或 ≤180 幣）—— 購物完成後才處理，已強化則跳過
+        if not self._strengthen_done_this_room and self._hit(context, img, "塔_偵測_強化可用"):
             return "strengthen_available"
 
         # 9. 上樓（商店/強化完成後前往下一層）
@@ -224,6 +225,7 @@ class TowerLoopAction(CustomAction):
             self._click_hit(context, img, "塔_偵測_保存紀錄")
 
         elif state == "strengthen_available":
+            self._strengthen_done_this_room = True  # 點了就標記，避免無限迴圈
             self._click_hit(context, img, "塔_偵測_強化可用")
             time.sleep(0.5)
 
@@ -231,7 +233,8 @@ class TowerLoopAction(CustomAction):
             self._handle_strengthen_card(context, img, priority_dict)
 
         elif state == "go_up":
-            self._shop_done_this_room = False  # 進入下一層，重置商店旗標
+            self._shop_done_this_room = False      # 進入下一層，重置旗標
+            self._strengthen_done_this_room = False
             self._click_hit(context, img, "塔_偵測_上樓")
             time.sleep(1.0)
 
