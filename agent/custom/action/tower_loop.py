@@ -239,7 +239,13 @@ class TowerLoopAction(CustomAction):
         elif state == "strengthen_available":
             self._strengthen_done_this_room = True  # 點了就標記，避免無限迴圈
             self._click_hit(context, img, "塔_偵測_強化可用")
-            time.sleep(1.5)  # 等強化選卡 UI 打開
+            time.sleep(1.5)  # 等強化選卡 UI 打開或錯誤彈窗
+            # 若幣不夠（付費強化但幣為0），彈窗會出現，關掉即可
+            img2 = context.tasker.controller.post_screencap().wait().get()
+            if self._hit(context, img2, "塔_商店_錢不夠"):
+                print("[tower_loop] strengthen too expensive, dismissing")
+                context.tasker.controller.post_click(640, 400).wait()
+                time.sleep(0.5)
 
         elif state == "strengthen_card":
             self._handle_strengthen_card(context, img, priority_dict)
@@ -375,6 +381,7 @@ class TowerLoopAction(CustomAction):
     def _handle_shop_main(self, context: Context, img):
         """商店主界面：掃描 8 格，買有折扣的 buff / 音符；幣多則重置繼續買。"""
         for reroll_round in range(3):  # 最多原始 + 2 次重置
+            items_bought = 0
             shop_closed_early = False
             for grid_idx, roi in _GRID_ROIS.items():
                 # 每格前重新截圖，確認仍在商店主界面
@@ -383,17 +390,19 @@ class TowerLoopAction(CustomAction):
                     print(f"[tower_loop] shop main gone at grid {grid_idx}")
                     shop_closed_early = True
                     break
-                self._process_grid(context, grid_idx, roi)
+                if self._process_grid(context, grid_idx, roi):
+                    items_bought += 1
 
             if shop_closed_early:
                 return  # 商店已自動關閉，交由主迴圈處理
 
-            # 本輪掃完：嘗試重置
-            if reroll_round < 2 and self._try_reroll_shop(context):
-                print(f"[tower_loop] shop rerolled (round {reroll_round + 1})")
+            # 本輪掃完：有買到東西才嘗試重置（沒幣時買不到，不重置）
+            if reroll_round < 2 and items_bought > 0 and self._try_reroll_shop(context):
+                print(f"[tower_loop] shop rerolled (round {reroll_round + 1}, bought {items_bought})")
                 time.sleep(1.5)  # 等重置動畫
             else:
-                break  # 無法重置或已達上限，結束
+                print(f"[tower_loop] shop done (round {reroll_round}, bought {items_bought})")
+                break  # 沒東西買或無法重置，結束
 
         time.sleep(0.5)
         self._exit_shop_main(context)
@@ -420,8 +429,8 @@ class TowerLoopAction(CustomAction):
 
         return True
 
-    def _process_grid(self, context: Context, grid_idx: int, roi: List[int]):
-        """點擊一個商店格子，判斷是否購買。"""
+    def _process_grid(self, context: Context, grid_idx: int, roi: List[int]) -> bool:
+        """點擊一個商店格子，判斷是否購買。回傳 True 表示成功購買。"""
         cx, cy = roi[0] + roi[2] // 2, roi[1] + roi[3] // 2
         context.tasker.controller.post_click(cx, cy).wait()
         time.sleep(0.8)  # 等詳情面板滑入
@@ -431,17 +440,17 @@ class TowerLoopAction(CustomAction):
         # 售罄 → 跳過
         if self._hit(context, img, "塔_商店_售罄"):
             print(f"[tower_loop] grid {grid_idx}: sold out")
-            return
+            return False
 
         # 錢不夠 → 跳過
         if self._hit(context, img, "塔_商店_錢不夠"):
             print(f"[tower_loop] grid {grid_idx}: insufficient funds")
-            return
+            return False
 
         # 沒有打開詳情面板 → 跳過
         if not self._hit(context, img, "塔_商店_購買按鈕"):
             print(f"[tower_loop] grid {grid_idx}: no detail panel")
-            return
+            return False
 
         has_discount = self._hit(context, img, "塔_商店_優惠")
         is_buff = self._hit(context, img, "塔_商店_buff類型")
@@ -450,17 +459,20 @@ class TowerLoopAction(CustomAction):
         if not has_discount:
             print(f"[tower_loop] grid {grid_idx}: no discount, skip")
             self._close_detail(context, img)
-            return
+            return False
 
         if is_buff:
             print(f"[tower_loop] grid {grid_idx}: discounted buff, buying")
             self._do_buy(context)
+            return True
         elif is_note and self._hit(context, img, "塔_商店_音符激活"):
             print(f"[tower_loop] grid {grid_idx}: discounted activated note, buying")
             self._do_buy(context)
+            return True
         else:
             print(f"[tower_loop] grid {grid_idx}: item not eligible, skip")
             self._close_detail(context, img)
+            return False
 
     def _do_buy(self, context: Context):
         """點擊購買確認按鈕。"""
