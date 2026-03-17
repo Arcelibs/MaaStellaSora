@@ -188,7 +188,11 @@ class TowerLoopAction(CustomAction):
         if self._hit(context, img, "星塔_节点_对话"):
             return "dialogue"
 
-        # 13. 點選空白關閉 / 默契提升
+        # 13. 突發事件選項（藍色圓圈按鈕圖示，非預設對話選項的隨機事件）
+        if self._hit(context, img, "塔_偵測_突發事件"):
+            return "dialogue_ignore"
+
+        # 14. 點選空白關閉 / 默契提升
         if self._hit(context, img, "塔_偵測_點選空白"):
             return "blank_close"
 
@@ -248,6 +252,11 @@ class TowerLoopAction(CustomAction):
 
         elif state == "blank_close":
             self._click_hit(context, img, "塔_偵測_點選空白")
+
+        elif state == "dialogue_ignore":
+            # 突發事件：點擊偵測到的選項按鈕（預設點到最後一個「算了」類選項較安全）
+            self._click_hit(context, img, "塔_偵測_突發事件")
+            time.sleep(0.5)
 
         elif state == "harmony_up":
             self._click_hit(context, img, "塔_偵測_默契提升")

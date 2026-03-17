@@ -299,5 +299,18 @@
             }
         },
         "action": {"type": "DoNothing"}
+    },
+
+    "塔_偵測_突發事件": {
+        "recognition": {
+            "type": "TemplateMatch",
+            "param": {
+                "template": [
+                    "ClimbTower/爬塔_对话选项按钮__624_278_44_46__574_228_144_146.png"
+                ],
+                "roi": [573, 206, 642, 385]
+            }
+        },
+        "action": {"type": "DoNothing"}
     }
 }
