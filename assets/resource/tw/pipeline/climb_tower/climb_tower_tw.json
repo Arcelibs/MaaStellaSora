@@ -327,6 +327,28 @@
         "action": {"type": "DoNothing"}
     },
 
+    "塔_偵測_離開確認": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": ["是否離開星塔"],
+                "roi": [340, 370, 620, 140]
+            }
+        },
+        "action": {"type": "DoNothing"}
+    },
+
+    "塔_偵測_確認按鈕": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": ["確認"],
+                "roi": [745, 558, 255, 80]
+            }
+        },
+        "action": {"type": "DoNothing"}
+    },
+
     "塔_偵測_突發事件": {
         "recognition": {
             "type": "TemplateMatch",

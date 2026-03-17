@@ -115,8 +115,13 @@ class TowerLoopAction(CustomAction):
             state = self._detect_state(context, img)
             print(f"[tower_loop] state={state}")
 
-            if state == "tower_complete":
-                print("[tower_loop] tower complete, done")
+            if state in ("tower_complete", "leave_confirm"):
+                if state == "leave_confirm":
+                    print("[tower_loop] leave confirm dialog, clicking 確認")
+                    self._click_hit(context, img, "塔_偵測_確認按鈕")
+                    time.sleep(2.0)
+                else:
+                    print("[tower_loop] tower complete, done")
                 return True
 
             if state == "unknown":
@@ -185,7 +190,11 @@ class TowerLoopAction(CustomAction):
         if self._hit(context, img, "塔_偵測_上樓"):
             return "go_up"
 
-        # 12. 最終商店離開星塔
+        # 12. 離開確認彈窗（點「離開星塔」後彈出的確認對話框）
+        if self._hit(context, img, "塔_偵測_離開確認"):
+            return "leave_confirm"
+
+        # 13. 最終商店離開星塔
         if self._hit(context, img, "塔_偵測_最終離開"):
             return "final_leave"
 
