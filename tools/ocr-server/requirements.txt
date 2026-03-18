@@ -1,9 +1,8 @@
-# 安裝指令：pip install -r requirements.txt
-# 建議 Python 3.10+，PaddleOCR v5 需要 PaddlePaddle
+# 安裝：pip install -r requirements.txt
+# Python 3.10+
 
 flask>=3.0
 flask-cors>=4.0
-paddlepaddle>=3.0.0       # CPU 版；GPU 版改成 paddlepaddle-gpu
-paddleocr>=2.9.0
+rapidocr-onnxruntime>=1.4.0   # 輕量 ONNX 推理，不需要安裝 PaddlePaddle
 opencv-python-headless>=4.8
 numpy>=1.24

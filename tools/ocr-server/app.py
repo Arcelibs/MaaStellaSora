@@ -1,35 +1,49 @@
 """
 星塔作業 OCR Server
 -------------------
-用法：
-  pip install -r requirements.txt
-  python app.py
+使用 PP-OCRv5 ONNX 模型，不需要安裝 PaddlePaddle。
 
-預設監聽 0.0.0.0:5000
+設定模型路徑（擇一）：
+  1. 環境變數：OCR_MODEL_DIR=/path/to/ppocr_v5-zh_cn
+  2. 直接修改下方 MODEL_DIR 常數
+
+VPS 部署：
+  pip install -r requirements.txt
+  OCR_MODEL_DIR=/path/to/ppocr_v5-zh_cn python app.py
 """
 
+import os
 import re
 import numpy as np
 import cv2
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
-from paddleocr import PaddleOCR
+from rapidocr_onnxruntime import RapidOCR
 
 app = Flask(__name__, static_folder="static")
 CORS(app)
 
-# 延遲初始化，第一次請求時載入模型（避免啟動過慢）
+# ── 模型路徑設定 ──────────────────────────────────────────────────
+MODEL_DIR = os.environ.get(
+    "OCR_MODEL_DIR",
+    os.path.join(os.path.dirname(__file__), "models"),  # 預設放在 models/ 子目錄
+)
+DET_MODEL = os.path.join(MODEL_DIR, "det.onnx")
+REC_MODEL = os.path.join(MODEL_DIR, "rec.onnx")
+KEYS_FILE  = os.path.join(MODEL_DIR, "keys.txt")
+# ──────────────────────────────────────────────────────────────────
+
 _ocr_engine = None
 
 
-def get_ocr() -> PaddleOCR:
+def get_ocr() -> RapidOCR:
     global _ocr_engine
     if _ocr_engine is None:
-        print("[ocr-server] 載入 PaddleOCR 模型中...")
-        _ocr_engine = PaddleOCR(
-            use_angle_cls=True,
-            lang="chinese_cht",   # 繁體中文；若模型不存在改 lang='ch'
-            show_log=False,
+        print(f"[ocr-server] 載入模型：{MODEL_DIR}")
+        _ocr_engine = RapidOCR(
+            det_model_path=DET_MODEL,
+            rec_model_path=REC_MODEL,
+            rec_keys_path=KEYS_FILE,
         )
         print("[ocr-server] 模型載入完成")
     return _ocr_engine
@@ -43,46 +57,34 @@ SECTION_MAP = {
     "可选": 1,  # 簡體 fallback
 }
 
-# 固定 UI 文字，不視為 buff 名稱
+# 固定 UI 文字
 SKIP_TEXTS = {
     "主位", "副位", "副位1", "副位2", "副位 1", "副位 2",
     "STELLABASE", "主力唱片", "替補唱片",
     "核心", "一般", "可選", "可选",
 }
 
-# 過濾 regex（純數字、純英文、純符號等）
 _SKIP_RE = re.compile(
-    r"^[\d★☆✦♦△○◇\s]+$"   # 純數字 / 符號 / 星星
+    r"^[\d★☆✦♦△○◇\s]+$"   # 純數字 / 符號
     r"|^[A-Za-z0-9\s\-_\.]+$"  # 純 ASCII
 )
 
 
 def _should_skip(text: str) -> bool:
     t = text.strip()
-    if not t:
-        return True
-    if t in SKIP_TEXTS:
+    if not t or t in SKIP_TEXTS:
         return True
     if len(t) < 2 or len(t) > 25:
         return True
     if _SKIP_RE.match(t):
         return True
-    # 至少要有一個中文字
     if not any("\u4e00" <= c <= "\u9fff" for c in t):
         return True
     return False
 
 
-def _box_center(box: dict):
-    return box["cx"], box["cy"]
-
-
 def _assign_sections(headers: list, content: list) -> tuple[dict, list]:
-    """
-    以空間位置將 content 文字分配到最近的上方 section header。
-    同欄判斷：水平距離 < 450px 視為同欄。
-    回傳 (grouped_dict, unassigned_list)
-    """
+    """依空間位置將 content 文字分配到最近的上方 section header。"""
     grouped = {3: [], 2: [], 1: []}
     unassigned = []
 
@@ -91,17 +93,12 @@ def _assign_sections(headers: list, content: list) -> tuple[dict, list]:
         best_score = float("inf")
 
         for h in headers:
-            # header 必須在 content 上方
             if h["cy"] >= box["cy"]:
                 continue
             x_dist = abs(h["cx"] - box["cx"])
             y_dist = box["cy"] - h["cy"]
-
-            # 水平距離過大 → 不同欄，跳過
-            if x_dist > 450:
+            if x_dist > 450:  # 不同欄
                 continue
-
-            # score：垂直距離為主，水平偏差為輔
             score = y_dist + x_dist * 0.4
             if score < best_score:
                 best_score = score
@@ -134,17 +131,17 @@ def ocr_endpoint():
         return jsonify({"error": "無法解析圖片，請確認格式"}), 400
 
     try:
-        result = get_ocr().ocr(img, cls=True)
+        result, _ = get_ocr()(img)
     except Exception as e:
         return jsonify({"error": f"OCR 失敗：{e}"}), 500
 
-    if not result or not result[0]:
+    if not result:
         return jsonify({"error": "OCR 未識別到文字"}), 500
 
-    # 解析 OCR 結果
+    # rapidocr 回傳格式：[[box_pts, text, confidence], ...]
     boxes = []
-    for line in result[0]:
-        pts, (text, conf) = line
+    for item in result:
+        pts, text, conf = item
         xs = [p[0] for p in pts]
         ys = [p[1] for p in pts]
         x1, y1, x2, y2 = min(xs), min(ys), max(xs), max(ys)
@@ -156,7 +153,6 @@ def ocr_endpoint():
             "conf": round(conf, 3),
         })
 
-    # 分離 section header 和內容文字
     headers = []
     content = []
     for b in boxes:
@@ -169,11 +165,7 @@ def ocr_endpoint():
         return jsonify({"error": "未找到「核心」「一般」「可選」標籤，請確認圖片格式"}), 422
 
     grouped, unassigned = _assign_sections(headers, content)
-
-    return jsonify({
-        "grouped": grouped,
-        "unassigned": unassigned,
-    })
+    return jsonify({"grouped": grouped, "unassigned": unassigned})
 
 
 if __name__ == "__main__":
