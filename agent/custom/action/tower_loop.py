@@ -529,8 +529,9 @@ class TowerLoopAction(CustomAction):
                 print(f"[tower_loop] grid {grid_idx}: buff (discounted), buying")
                 self._do_buy(context)
                 return True
-            else:
-                print(f"[tower_loop] grid {grid_idx}: buff (no discount), skip")
+            print(f"[tower_loop] grid {grid_idx}: buff (no discount), skip")
+            self._close_detail(context, img)
+            return False
 
         if is_note:
             # 音符類：只買已激活（與隊伍相關）的音符；未激活的沒有效益，跳過
@@ -539,12 +540,11 @@ class TowerLoopAction(CustomAction):
                 print(f"[tower_loop] grid {grid_idx}: activated note, buying")
                 self._do_buy(context)
                 return True
-            else:
-                print(f"[tower_loop] grid {grid_idx}: unactivated note, skip")
+            print(f"[tower_loop] grid {grid_idx}: unactivated note, skip")
+            self._close_detail(context, img)
+            return False
 
-        else:
-            print(f"[tower_loop] grid {grid_idx}: skip (not buff or note)")
-
+        print(f"[tower_loop] grid {grid_idx}: skip (not buff or note)")
         self._close_detail(context, img)
         return False
 
