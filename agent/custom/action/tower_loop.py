@@ -232,6 +232,10 @@ class TowerLoopAction(CustomAction):
         if self._hit(context, img, "塔_偵測_突發事件"):
             return "dialogue_ignore"
 
+        # 16. 星塔背包（誤觸上方背包按鈕時，偵測到需按返回鍵離開）
+        if self._hit(context, img, "塔_偵測_星塔背包"):
+            return "backpack_screen"
+
         return "unknown"
 
     def _hit(self, context: Context, img, node: str) -> bool:
@@ -307,6 +311,11 @@ class TowerLoopAction(CustomAction):
         elif state == "harmony_up":
             self._click_hit(context, img, "塔_偵測_默契提升")
             time.sleep(1.0)
+
+        elif state == "backpack_screen":
+            print("[tower_loop] backpack screen detected, pressing back")
+            context.tasker.controller.post_click(55, 75).wait()
+            time.sleep(1.5)
 
     def _click_hit(self, context: Context, img, node: str):
         """偵測節點並點擊命中位置的中心。"""

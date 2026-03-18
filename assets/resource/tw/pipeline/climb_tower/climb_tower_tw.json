@@ -393,5 +393,17 @@
         },
         "action": {"type": "DoNothing"},
         "timeout": 1000
+    },
+
+    "塔_偵測_星塔背包": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": ["星塔背包"],
+                "roi": [60, 55, 260, 50]
+            }
+        },
+        "action": {"type": "DoNothing"},
+        "timeout": 1000
     }
 }
