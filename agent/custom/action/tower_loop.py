@@ -117,8 +117,8 @@ class TowerLoopAction(CustomAction):
         consecutive_unknown = 0
         self._shop_done_this_room = False      # 每次 run() 重置
         self._strengthen_done_this_room = False
-        self._current_floor = 1                # 樓層計數（每次 go_up 時 +1）
-        self._config = config                  # 設定（reroll_from_floor 等）
+        self._shop_visit_count = 0             # 商店造訪次數（每次進商店主界面 +1）
+        self._config = config                  # 設定（skip_shop_rerolls 等）
 
         while not context.tasker.stopping:
             if time.time() - start > self.TIMEOUT:
@@ -275,8 +275,6 @@ class TowerLoopAction(CustomAction):
         elif state == "go_up":
             self._shop_done_this_room = False      # 進入下一層，重置旗標
             self._strengthen_done_this_room = False
-            self._current_floor += 1
-            print(f"[tower_loop] going up → floor {self._current_floor}")
             self._click_hit(context, img, "塔_偵測_上樓")
             time.sleep(2.0)  # 換層動畫較長
 
@@ -288,6 +286,8 @@ class TowerLoopAction(CustomAction):
             self._handle_shop_node(context, img)
 
         elif state == "shop_main":
+            self._shop_visit_count += 1
+            print(f"[tower_loop] shop visit #{self._shop_visit_count}")
             self._handle_shop_main(context, img)
             self._shop_done_this_room = True  # 購物完成，本房間不再重複進入
 
@@ -469,9 +469,9 @@ class TowerLoopAction(CustomAction):
 
     def _try_reroll_shop(self, context: Context) -> bool:
         """嘗試點擊商店重置按鈕。若成功回傳 True，無法重置回傳 False。"""
-        reroll_from_floor = self._config.get("reroll_from_floor", 1)
-        if self._current_floor < reroll_from_floor:
-            print(f"[tower_loop] shop reroll skipped: floor {self._current_floor} < reroll_from_floor {reroll_from_floor}")
+        skip_n = self._config.get("skip_shop_rerolls", 0)
+        if self._shop_visit_count <= skip_n:
+            print(f"[tower_loop] shop reroll skipped: visit #{self._shop_visit_count} <= skip_shop_rerolls {skip_n}")
             return False
 
         img = context.tasker.controller.post_screencap().wait().get()
