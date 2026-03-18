@@ -171,7 +171,12 @@ class TowerLoopAction(CustomAction):
         if self._hit(context, img, "塔_偵測_完成"):
             return "tower_complete"
 
-        # 2. Buff 選擇畫面（推薦圖示 template match）
+        # 2. 星塔背包（誤觸背包按鈕：需在 buff 選擇之前偵測，
+        #    因背包畫面的技能卡綠框可能誤觸 buff 選擇 TemplateMatch）
+        if self._hit(context, img, "塔_偵測_星塔背包"):
+            return "backpack_screen"
+
+        # 3. Buff 選擇畫面（推薦圖示 template match）
         if self._hit(context, img, "塔_偵測_buff選擇"):
             return "buff_select"
 
@@ -231,10 +236,6 @@ class TowerLoopAction(CustomAction):
         # 15. 突發事件選項（藍色圓圈按鈕圖示，非預設對話選項的隨機事件）
         if self._hit(context, img, "塔_偵測_突發事件"):
             return "dialogue_ignore"
-
-        # 16. 星塔背包（誤觸上方背包按鈕時，偵測到需按返回鍵離開）
-        if self._hit(context, img, "塔_偵測_星塔背包"):
-            return "backpack_screen"
 
         return "unknown"
 
