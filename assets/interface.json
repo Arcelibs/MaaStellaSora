@@ -1362,6 +1362,21 @@
                             }
                         }
                     }
+                },
+                {
+                    "name": "翡冷翠+縹莉姬+珂賽特（技傷流）",
+                    "label": "翡冷翠+縹莉姬+珂賽特（技傷流）",
+                    "pipeline_override": {
+                        "星塔_爬塔流程": {
+                            "action": {
+                                "type": "Custom",
+                                "param": {
+                                    "custom_action": "tower_loop",
+                                    "custom_action_param": "feilengcui_piaoliji_kesaite_jishang.json"
+                                }
+                            }
+                        }
+                    }
                 }
             ]
         }
