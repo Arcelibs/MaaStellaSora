@@ -464,11 +464,16 @@ class TowerLoopAction(CustomAction):
         is_buff = self._hit(context, img, "塔_商店_buff類型")
         is_note = (not is_buff) and self._hit(context, img, "塔_商店_音符類型")
 
+        has_discount = self._hit(context, img, "塔_商店_優惠")
+
         if is_buff:
-            # buff 類（潛能特飲等）：永遠值得買
-            print(f"[tower_loop] grid {grid_idx}: buff, buying")
-            self._do_buy(context)
-            return True
+            # buff 類（潛能特飲等）：有折扣才買（無折扣要200幣，不划算）
+            if has_discount:
+                print(f"[tower_loop] grid {grid_idx}: buff (discounted), buying")
+                self._do_buy(context)
+                return True
+            else:
+                print(f"[tower_loop] grid {grid_idx}: buff (no discount), skip")
 
         if is_note:
             # 音符類：只買已激活（與隊伍相關）的音符；未激活的沒有效益，跳過
