@@ -388,6 +388,7 @@
                 "template": [
                     "ClimbTower/爬塔_对话选项按钮__624_278_44_46__574_228_144_146.png"
                 ],
+                "threshold": [0.80],
                 "roi": [573, 206, 642, 385]
             }
         },
@@ -410,8 +411,8 @@
         "recognition": {
             "type": "OCR",
             "param": {
-                "expected": ["星塔背包"],
-                "roi": [60, 55, 260, 50]
+                "expected": ["星塔背包", "背包"],
+                "roi": [0, 40, 380, 75]
             }
         },
         "action": {"type": "DoNothing"},

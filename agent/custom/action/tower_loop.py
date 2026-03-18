@@ -314,8 +314,8 @@ class TowerLoopAction(CustomAction):
             time.sleep(1.0)
 
         elif state == "backpack_screen":
-            print("[tower_loop] backpack screen detected, pressing back")
-            context.tasker.controller.post_click(55, 75).wait()
+            print("[tower_loop] backpack screen detected, pressing Android back key")
+            context.tasker.controller.post_press_key(4).wait()
             time.sleep(1.5)
 
     def _click_hit(self, context: Context, img, node: str):
