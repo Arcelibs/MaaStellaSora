@@ -381,5 +381,17 @@
             }
         },
         "action": {"type": "DoNothing"}
+    },
+
+    "塔_buff_重置按鈕": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": ["[0-9]+"],
+                "roi": [1150, 625, 130, 60]
+            }
+        },
+        "action": {"type": "DoNothing"},
+        "timeout": 1000
     }
 }

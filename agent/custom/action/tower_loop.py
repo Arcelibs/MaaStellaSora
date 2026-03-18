@@ -318,20 +318,13 @@ class TowerLoopAction(CustomAction):
         # 無推薦圖示；同樣走 priority_dict，無命中就點最左卡
         self._select_card_and_take(context, img, priority_dict, fallback_box=None)
 
-    def _select_card_and_take(
-        self,
-        context: Context,
-        img,
-        priority_dict: Dict,
-        fallback_box: Optional[Tuple],
-    ):
-        """掃描 priority_dict，點最高優先卡，再點拿走。"""
-        target_box = None
-
-        for priority in sorted(priority_dict.keys(), reverse=True):
-            for target in priority_dict[priority]:
+    def _find_priority_card(self, context: Context, img) -> Optional[Tuple]:
+        """掃描畫面上的卡牌，回傳最高優先命中的 box；無命中回傳 None。"""
+        # 由呼叫端傳入 priority_dict，這裡從 instance 變數讀取
+        for priority in sorted(self._priority_dict.keys(), reverse=True):
+            for target in self._priority_dict[priority]:
                 if context.tasker.stopping:
-                    return
+                    return None
                 print(f"[tower_loop] scanning priority {priority}: {target!r}")
                 reco = context.run_recognition(
                     "塔_OCR_卡牌區域",
@@ -345,20 +338,64 @@ class TowerLoopAction(CustomAction):
                     },
                 )
                 if reco and reco.hit and reco.best_result:
-                    target_box = reco.best_result.box
-                    print(f"[tower_loop] found {target!r} at {target_box}")
-                    break
-            if target_box is not None:
-                break
+                    box = reco.best_result.box
+                    print(f"[tower_loop] found {target!r} at {box}")
+                    return box
+        return None
 
-        if target_box is None:
+    def _try_reroll_buff(self, context: Context) -> bool:
+        """嘗試點擊 buff 選擇畫面右下角的重置按鈕。成功點擊回傳 True。"""
+        img = context.tasker.controller.post_screencap().wait().get()
+        result = context.run_recognition("塔_buff_重置按鈕", img)
+        if result and result.hit and result.best_result:
+            # OCR 命中的是幣數數字，圓形按鈕在其正上方約 25px
+            bx, by, bw, bh = result.best_result.box
+            cx, cy = bx + bw // 2, by - 25
+            context.tasker.controller.post_click(cx, cy).wait()
+            print(f"[tower_loop] buff reroll clicked at ({cx}, {cy})")
+            return True
+        # fallback 固定座標（右下角按鈕位置）
+        print("[tower_loop] buff reroll OCR failed, fallback click (1210, 635)")
+        context.tasker.controller.post_click(1210, 635).wait()
+        return True
+
+    def _select_card_and_take(
+        self,
+        context: Context,
+        img,
+        priority_dict: Dict,
+        fallback_box: Optional[Tuple],
+    ):
+        """掃描 priority_dict，點最高優先卡，再點拿走。
+        若無命中且有優先清單，最多重置 2 次後再選。
+        """
+        self._priority_dict = priority_dict  # 供 _find_priority_card 使用
+        MAX_BUFF_REROLLS = 2
+        reroll_count = 0
+
+        while True:
+            target_box = self._find_priority_card(context, img)
+
+            if target_box is not None:
+                break  # 找到優先卡，直接選
+
+            # 無命中：有優先清單且還有重置次數 → 重置後重掃
+            if priority_dict and reroll_count < MAX_BUFF_REROLLS:
+                print(f"[tower_loop] no priority match, rerolling buff ({reroll_count + 1}/{MAX_BUFF_REROLLS})")
+                self._try_reroll_buff(context)
+                reroll_count += 1
+                time.sleep(1.5)  # 等新卡動畫
+                img = context.tasker.controller.post_screencap().wait().get()
+                continue
+
+            # 無法再重置或無優先清單 → fallback
             if fallback_box is not None:
                 target_box = fallback_box
-                print(f"[tower_loop] no priority match, using fallback at {fallback_box}")
+                print(f"[tower_loop] no priority match after {reroll_count} reroll(s), using fallback")
             else:
-                # 無推薦圖示（強化選卡）→ 點畫面中央偏左第一張卡的大致位置
                 target_box = (350, 430, 90, 30)
                 print("[tower_loop] no match, clicking first card area")
+            break
 
         cx, cy = _box_center(target_box)
         context.tasker.controller.post_click(cx, cy).wait()
@@ -372,7 +409,6 @@ class TowerLoopAction(CustomAction):
             context.tasker.controller.post_click(cx2, cy2).wait()
             print("[tower_loop] 拿走 clicked")
         else:
-            # 退一步：直接點「拿走」按鈕的固定座標
             print("[tower_loop] 拿走 not found, fallback click at fixed position")
             context.tasker.controller.post_click(335, 710).wait()
         time.sleep(1.5)  # 等取得 buff 動畫完成
