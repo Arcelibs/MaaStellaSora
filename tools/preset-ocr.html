@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>星塔作業 → Preset JSON</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+      color: #f8fafc;
+    }
+    .subtitle {
+      font-size: 0.85rem;
+      color: #64748b;
+      margin-bottom: 1.5rem;
+    }
+
+    .card {
+      background: #1e2330;
+      border: 1px solid #2d3548;
+      border-radius: 12px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+
+    label {
+      display: block;
+      font-size: 0.8rem;
+      color: #94a3b8;
+      margin-bottom: 0.4rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    input[type="password"], input[type="text"] {
+      width: 100%;
+      background: #0f1117;
+      border: 1px solid #2d3548;
+      border-radius: 8px;
+      padding: 0.6rem 0.8rem;
+      color: #e2e8f0;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input:focus { border-color: #6366f1; }
+
+    .drop-zone {
+      border: 2px dashed #2d3548;
+      border-radius: 12px;
+      padding: 2.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+    }
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: #6366f1;
+      background: #1a1f2e;
+    }
+    .drop-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+    .drop-icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
+    .drop-text { color: #64748b; font-size: 0.9rem; }
+    .drop-text strong { color: #94a3b8; }
+
+    #preview {
+      display: none;
+      margin-top: 1rem;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #2d3548;
+    }
+    #preview img {
+      width: 100%;
+      max-height: 400px;
+      object-fit: contain;
+      background: #0f1117;
+      display: block;
+    }
+
+    button {
+      width: 100%;
+      padding: 0.75rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    #analyzeBtn {
+      background: #6366f1;
+      color: white;
+    }
+    #analyzeBtn:hover:not(:disabled) { background: #4f46e5; }
+    #analyzeBtn:disabled { background: #2d3548; color: #64748b; cursor: not-allowed; }
+
+    #status {
+      font-size: 0.85rem;
+      color: #64748b;
+      text-align: center;
+      margin-top: 0.5rem;
+      min-height: 1.2em;
+    }
+    #status.loading { color: #6366f1; }
+    #status.error   { color: #f87171; }
+    #status.success { color: #4ade80; }
+
+    .result-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+    .result-header span { font-size: 0.8rem; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+
+    #copyBtn {
+      width: auto;
+      padding: 0.35rem 0.9rem;
+      background: #2d3548;
+      color: #94a3b8;
+      font-size: 0.8rem;
+      border-radius: 6px;
+    }
+    #copyBtn:hover { background: #374151; color: #e2e8f0; }
+
+    #output {
+      background: #0f1117;
+      border: 1px solid #2d3548;
+      border-radius: 8px;
+      padding: 1rem;
+      font-family: "Fira Code", "Cascadia Code", monospace;
+      font-size: 0.82rem;
+      line-height: 1.6;
+      color: #a3e635;
+      white-space: pre-wrap;
+      word-break: break-all;
+      min-height: 5rem;
+      max-height: 500px;
+      overflow-y: auto;
+    }
+
+    .tag {
+      display: inline-block;
+      font-size: 0.7rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      font-weight: 600;
+    }
+    .tag-3 { background: #fef08a22; color: #fde047; border: 1px solid #fde04744; }
+    .tag-2 { background: #bfdbfe22; color: #93c5fd; border: 1px solid #93c5fd44; }
+    .tag-1 { background: #d1fae522; color: #6ee7b7; border: 1px solid #6ee7b744; }
+
+    .legend {
+      display: flex;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.8rem;
+      color: #64748b;
+    }
+
+    @media (min-width: 768px) {
+      body { padding: 3rem; max-width: 700px; margin: 0 auto; }
+    }
+  </style>
+</head>
+<body>
+
+  <h1>星塔作業 → Preset JSON</h1>
+  <p class="subtitle">上傳作業圖片，自動提取核心/一般/可選 buff 名稱並輸出 preset 格式</p>
+
+  <div class="card">
+    <label>Anthropic API Key</label>
+    <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off">
+    <p style="font-size:0.75rem;color:#475569;margin-top:0.4rem;">僅在瀏覽器本地使用，不會上傳至任何伺服器。儲存於 localStorage。</p>
+  </div>
+
+  <div class="card">
+    <label>作業圖片</label>
+    <div class="drop-zone" id="dropZone">
+      <input type="file" id="fileInput" accept="image/*">
+      <div class="drop-icon">🖼️</div>
+      <p class="drop-text"><strong>點擊選擇</strong>或拖曳圖片至此</p>
+      <p class="drop-text" style="font-size:0.78rem;margin-top:0.3rem;">支援 PNG / JPG / WebP</p>
+    </div>
+    <div id="preview"><img id="previewImg" alt="preview"></div>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><span class="tag tag-3">3</span> 核心 → priority 3</div>
+    <div class="legend-item"><span class="tag tag-2">2</span> 一般 → priority 2</div>
+    <div class="legend-item"><span class="tag tag-1">1</span> 可選 → priority 1</div>
+  </div>
+
+  <button id="analyzeBtn" disabled>分析圖片</button>
+  <p id="status"></p>
+
+  <div class="card" id="resultCard" style="display:none;margin-top:1rem;">
+    <div class="result-header">
+      <span>Preset JSON</span>
+      <button id="copyBtn">複製</button>
+    </div>
+    <div id="output"></div>
+  </div>
+
+  <script>
+    const apiKeyInput = document.getElementById('apiKey');
+    const fileInput   = document.getElementById('fileInput');
+    const dropZone    = document.getElementById('dropZone');
+    const preview     = document.getElementById('preview');
+    const previewImg  = document.getElementById('previewImg');
+    const analyzeBtn  = document.getElementById('analyzeBtn');
+    const statusEl    = document.getElementById('status');
+    const resultCard  = document.getElementById('resultCard');
+    const output      = document.getElementById('output');
+    const copyBtn     = document.getElementById('copyBtn');
+
+    // Restore API key
+    const savedKey = localStorage.getItem('anthropic_api_key');
+    if (savedKey) apiKeyInput.value = savedKey;
+    apiKeyInput.addEventListener('change', () => {
+      localStorage.setItem('anthropic_api_key', apiKeyInput.value.trim());
+    });
+
+    let imageBase64 = null;
+    let imageMime   = null;
+
+    function setStatus(msg, type = '') {
+      statusEl.textContent = msg;
+      statusEl.className = type;
+    }
+
+    function checkReady() {
+      analyzeBtn.disabled = !(imageBase64 && apiKeyInput.value.trim());
+    }
+
+    apiKeyInput.addEventListener('input', checkReady);
+
+    function handleFile(file) {
+      if (!file || !file.type.startsWith('image/')) return;
+      imageMime = file.type;
+      const reader = new FileReader();
+      reader.onload = e => {
+        const dataUrl = e.target.result;
+        imageBase64 = dataUrl.split(',')[1];
+        previewImg.src = dataUrl;
+        preview.style.display = 'block';
+        setStatus('');
+        resultCard.style.display = 'none';
+        checkReady();
+      };
+      reader.readAsDataURL(file);
+    }
+
+    fileInput.addEventListener('change', () => handleFile(fileInput.files[0]));
+
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      handleFile(e.dataTransfer.files[0]);
+    });
+
+    analyzeBtn.addEventListener('click', analyze);
+
+    async function analyze() {
+      const key = apiKeyInput.value.trim();
+      if (!key || !imageBase64) return;
+
+      localStorage.setItem('anthropic_api_key', key);
+      analyzeBtn.disabled = true;
+      setStatus('分析中，請稍候…', 'loading');
+      resultCard.style.display = 'none';
+
+      const prompt = `這是一張《星塔旅人》的角色作業圖片。
+請找出圖中所有角色（主位和副位）的 buff 卡牌名稱，依照以下分類整合：
+- 核心 → "3"
+- 一般 → "2"
+- 可選 → "1"
+
+規則：
+1. 合併所有角色的同一分類（核心全部放 "3"，以此類推）
+2. 若同一 buff 出現多次，只保留一筆
+3. 只輸出 JSON，不要任何說明文字
+
+輸出格式：
+{
+  "3": ["buff名稱1", "buff名稱2"],
+  "2": ["buff名稱A"],
+  "1": ["buff名稱X", "buff名稱Y"]
+}`;
+
+      try {
+        const resp = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'x-api-key': key,
+            'anthropic-version': '2023-06-01',
+            'content-type': 'application/json',
+            'anthropic-dangerous-direct-browser-access': 'true',
+          },
+          body: JSON.stringify({
+            model: 'claude-opus-4-6',
+            max_tokens: 2048,
+            messages: [{
+              role: 'user',
+              content: [
+                { type: 'image', source: { type: 'base64', media_type: imageMime, data: imageBase64 } },
+                { type: 'text', text: prompt }
+              ]
+            }]
+          })
+        });
+
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          throw new Error(err?.error?.message || `HTTP ${resp.status}`);
+        }
+
+        const data = await resp.json();
+        const text = data.content?.[0]?.text || '';
+
+        // Extract JSON from response
+        const match = text.match(/\{[\s\S]*\}/);
+        if (!match) throw new Error('回應中找不到 JSON，請重試');
+
+        const parsed = JSON.parse(match[0]);
+        const formatted = JSON.stringify(parsed, null, 2);
+
+        output.textContent = formatted;
+        resultCard.style.display = 'block';
+        setStatus(`完成！共提取 ${Object.values(parsed).flat().length} 個 buff`, 'success');
+      } catch (e) {
+        setStatus(`錯誤：${e.message}`, 'error');
+      } finally {
+        checkReady();
+      }
+    }
+
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(output.textContent).then(() => {
+        copyBtn.textContent = '已複製 ✓';
+        setTimeout(() => copyBtn.textContent = '複製', 2000);
+      });
+    });
+  </script>
+</body>
+</html>
