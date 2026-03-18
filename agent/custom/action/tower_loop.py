@@ -206,7 +206,7 @@ class TowerLoopAction(CustomAction):
             return "shop_node"
 
         # 9. 商店主界面（格子購物視圖）
-        if self._hit(context, img, "塔_偵測_商店主界面"):
+        if not self._shop_done_this_room and self._hit(context, img, "塔_偵測_商店主界面"):
             return "shop_main"
 
         # 10. 強化可用（免費或 ≤180 幣）—— 購物完成後才處理，已強化則跳過
@@ -485,6 +485,10 @@ class TowerLoopAction(CustomAction):
             return False
 
         img = context.tasker.controller.post_screencap().wait().get()
+
+        if self._shop_visit_count <= 2 and not self._hit(context, img, "塔_商店_幣數六五零以上"):
+            print(f"[tower_loop] shop reroll skipped: visit #{self._shop_visit_count} coins < 650")
+            return False
 
         result = context.run_recognition("塔_商店_重置按鈕", img)
         if not (result and result.hit and result.best_result):
