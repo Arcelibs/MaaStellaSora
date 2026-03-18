@@ -23,10 +23,16 @@ from maa.custom_action import CustomAction
 # 工具函數
 # ──────────────────────────────────────────────────────────────────
 
-def _load_preset(param_raw: Any) -> Dict[int, List[str]]:
-    """從 preset 檔名或 JSON 字串載入 buff 優先級字典。"""
+def _load_preset(param_raw: Any) -> Tuple[Dict[int, List[str]], Dict]:
+    """從 preset 檔名或 JSON 字串載入 buff 優先級字典與設定。
+
+    Returns:
+        (priority_dict, config)
+        config 支援的欄位：
+          reroll_from_floor (int): 幾樓以上才允許重置商店，預設 1（每層都可重置）
+    """
     if param_raw is None:
-        return {}
+        return {}, {}
 
     if isinstance(param_raw, (bytes, bytearray)):
         param_raw = param_raw.decode("utf-8", errors="replace")
@@ -34,7 +40,7 @@ def _load_preset(param_raw: Any) -> Dict[int, List[str]]:
     if isinstance(param_raw, str):
         param_raw = param_raw.strip()
         if not param_raw or param_raw in ("{}", ""):
-            return {}
+            return {}, {}
         if param_raw.startswith("{"):
             parsed = json.loads(param_raw)
         else:
@@ -54,7 +60,13 @@ def _load_preset(param_raw: Any) -> Dict[int, List[str]]:
         parsed = param_raw
 
     if not isinstance(parsed, dict):
-        return {}
+        return {}, {}
+
+    # 提取 config（非整數 key 的特殊欄位）
+    config: Dict = {}
+    raw_config = parsed.get("config")
+    if isinstance(raw_config, dict):
+        config = raw_config
 
     result: Dict[int, List[str]] = {}
     for key, value in parsed.items():
@@ -67,7 +79,7 @@ def _load_preset(param_raw: Any) -> Dict[int, List[str]]:
         else:
             targets = [value]
         result[priority] = [str(t) for t in targets if str(t).strip()]
-    return result
+    return result, config
 
 
 def _box_center(box: Tuple[int, int, int, int]) -> Tuple[int, int]:
@@ -98,13 +110,15 @@ class TowerLoopAction(CustomAction):
     MAX_UNKNOWN = 10        # 連續未知狀態上限
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        priority_dict = _load_preset(argv.custom_action_param)
-        print(f"[tower_loop] started, priority levels: {sorted(priority_dict.keys(), reverse=True)}")
+        priority_dict, config = _load_preset(argv.custom_action_param)
+        print(f"[tower_loop] started, priority levels: {sorted(priority_dict.keys(), reverse=True)}, config: {config}")
 
         start = time.time()
         consecutive_unknown = 0
         self._shop_done_this_room = False      # 每次 run() 重置
         self._strengthen_done_this_room = False
+        self._current_floor = 1                # 樓層計數（每次 go_up 時 +1）
+        self._config = config                  # 設定（reroll_from_floor 等）
 
         while not context.tasker.stopping:
             if time.time() - start > self.TIMEOUT:
@@ -261,6 +275,8 @@ class TowerLoopAction(CustomAction):
         elif state == "go_up":
             self._shop_done_this_room = False      # 進入下一層，重置旗標
             self._strengthen_done_this_room = False
+            self._current_floor += 1
+            print(f"[tower_loop] going up → floor {self._current_floor}")
             self._click_hit(context, img, "塔_偵測_上樓")
             time.sleep(2.0)  # 換層動畫較長
 
@@ -453,6 +469,11 @@ class TowerLoopAction(CustomAction):
 
     def _try_reroll_shop(self, context: Context) -> bool:
         """嘗試點擊商店重置按鈕。若成功回傳 True，無法重置回傳 False。"""
+        reroll_from_floor = self._config.get("reroll_from_floor", 1)
+        if self._current_floor < reroll_from_floor:
+            print(f"[tower_loop] shop reroll skipped: floor {self._current_floor} < reroll_from_floor {reroll_from_floor}")
+            return False
+
         img = context.tasker.controller.post_screencap().wait().get()
 
         result = context.run_recognition("塔_商店_重置按鈕", img)
