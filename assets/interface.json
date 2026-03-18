@@ -1332,6 +1332,21 @@
                             }
                         }
                     }
+                },
+                {
+                    "name": "希婭+密捏瓦+緹莉婭（夜兔流）",
+                    "label": "希婭+密捏瓦+緹莉婭（夜兔流）",
+                    "pipeline_override": {
+                        "星塔_爬塔流程": {
+                            "action": {
+                                "type": "Custom",
+                                "param": {
+                                    "custom_action": "tower_loop",
+                                    "custom_action_param": "xiya_miniewa_tiliya_yetuliu.json"
+                                }
+                            }
+                        }
+                    }
                 }
             ]
         }
