@@ -417,5 +417,28 @@
         },
         "action": {"type": "DoNothing"},
         "timeout": 1000
+    },
+
+    "塔_選隊_角色名稱": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [100, 450, 1100, 80]
+            }
+        },
+        "action": {"type": "DoNothing"},
+        "timeout": 2000
+    },
+
+    "塔_選隊_右箭頭": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": [">", "▶"],
+                "roi": [1050, 260, 200, 200]
+            }
+        },
+        "action": {"type": "DoNothing"},
+        "timeout": 1000
     }
 }

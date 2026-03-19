@@ -1,6 +1,7 @@
 {
   "config": {
-    "skip_shop_rerolls": 1
+    "skip_shop_rerolls": 1,
+    "team_members": ["風影", "夏花", "杏子"]
   },
   "3": [
     "雙影同狩",

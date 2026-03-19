@@ -1,6 +1,7 @@
 {
   "config": {
-    "skip_shop_rerolls": 1
+    "skip_shop_rerolls": 1,
+    "team_members": ["希婭", "密捏瓦", "緹莉婭"]
   },
   "3": [
     "星舞追躍",

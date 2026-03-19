@@ -1292,6 +1292,15 @@
                                     "custom_action_param": "qiandushi-water.json"
                                 }
                             }
+                        },
+                        "星塔_選隊伍": {
+                            "action": {
+                                "type": "Custom",
+                                "param": {
+                                    "custom_action": "team_select",
+                                    "custom_action_param": "qiandushi-water.json"
+                                }
+                            }
                         }
                     }
                 },
@@ -1304,6 +1313,15 @@
                                 "type": "Custom",
                                 "param": {
                                     "custom_action": "tower_loop",
+                                    "custom_action_param": "xiya_miniewa_tiliya_yetuliu.json"
+                                }
+                            }
+                        },
+                        "星塔_選隊伍": {
+                            "action": {
+                                "type": "Custom",
+                                "param": {
+                                    "custom_action": "team_select",
                                     "custom_action_param": "xiya_miniewa_tiliya_yetuliu.json"
                                 }
                             }
@@ -1322,6 +1340,15 @@
                                     "custom_action_param": "fengying_xiahua_xingzi_pugong.json"
                                 }
                             }
+                        },
+                        "星塔_選隊伍": {
+                            "action": {
+                                "type": "Custom",
+                                "param": {
+                                    "custom_action": "team_select",
+                                    "custom_action_param": "fengying_xiahua_xingzi_pugong.json"
+                                }
+                            }
                         }
                     }
                 },
@@ -1337,6 +1364,15 @@
                                     "custom_action_param": "feilengcui_piaoliji_kesaite_jishang.json"
                                 }
                             }
+                        },
+                        "星塔_選隊伍": {
+                            "action": {
+                                "type": "Custom",
+                                "param": {
+                                    "custom_action": "team_select",
+                                    "custom_action_param": "feilengcui_piaoliji_kesaite_jishang.json"
+                                }
+                            }
                         }
                     }
                 },
@@ -1349,6 +1385,15 @@
                                 "type": "Custom",
                                 "param": {
                                     "custom_action": "tower_loop",
+                                    "custom_action_param": "xiya_miniewa_tiliya_xuetu.json"
+                                }
+                            }
+                        },
+                        "星塔_選隊伍": {
+                            "action": {
+                                "type": "Custom",
+                                "param": {
+                                    "custom_action": "team_select",
                                     "custom_action_param": "xiya_miniewa_tiliya_xuetu.json"
                                 }
                             }

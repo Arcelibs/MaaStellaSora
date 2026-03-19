@@ -25,7 +25,31 @@
       "param": {
         "expected": ["快速戰鬥"]
       }
-    }
+    },
+    "next": [
+      "星塔_選隊伍",
+      "星塔_快速战斗按钮"
+    ]
+  },
+  "星塔_選隊伍": {
+    "recognition": {
+      "type": "OCR",
+      "param": {
+        "expected": ["下一步"],
+        "roi": [1050, 620, 200, 60]
+      }
+    },
+    "action": {
+      "type": "Custom",
+      "param": {
+        "custom_action": "team_select",
+        "custom_action_param": ""
+      }
+    },
+    "next": [
+      "星塔_编队角色",
+      "星塔_選隊伍"
+    ]
   },
   "星塔_开始战斗": {
     "recognition": {
