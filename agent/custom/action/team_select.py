@@ -41,7 +41,7 @@ class TeamSelectAction(CustomAction):
 
             print(f"[team_select] not matched, clicking right arrow (attempt {attempt + 1})")
             self._click_right_arrow(context, img)
-            time.sleep(0.8)
+            time.sleep(1.5)
 
         return True
 
