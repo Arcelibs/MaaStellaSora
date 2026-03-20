@@ -43,6 +43,19 @@ def _load_preset(param_raw: Any) -> Tuple[Dict[int, List[str]], Dict]:
             return {}, {}
         if param_raw.startswith("{"):
             parsed = json.loads(param_raw)
+            # Pro 模式：{"preset_file": "xxx.json", "pro_mode": true}
+            if isinstance(parsed, dict) and "preset_file" in parsed:
+                pro_mode_flag = parsed.get("pro_mode", False)
+                filename = parsed["preset_file"]
+                agent_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                preset_path = os.path.join(agent_dir, "presets", filename)
+                print(f"[tower_loop] loading preset (pro_mode={pro_mode_flag}): {preset_path!r}")
+                with open(preset_path, "r", encoding="utf-8-sig") as f:
+                    parsed = json.load(f)
+                if not isinstance(parsed.get("config"), dict):
+                    parsed["config"] = {}
+                if pro_mode_flag:
+                    parsed["config"]["pro_mode"] = True
         else:
             filename = param_raw
             if param_raw.startswith('"'):
@@ -119,6 +132,10 @@ class TowerLoopAction(CustomAction):
         self._strengthen_done_this_room = False
         self._shop_visit_count = 0             # 商店造訪次數（每次進商店主界面 +1）
         self._config = config                  # 設定（skip_shop_rerolls 等）
+        self._pro_mode = config.get("pro_mode", False)
+        self._current_floor = 0
+        if self._pro_mode:
+            print("[tower_loop] PRO MODE enabled — discount-only notes, 1000 coin reroll, conservative buff reroll")
 
         while not context.tasker.stopping:
             if time.time() - start > self.TIMEOUT:
@@ -280,6 +297,8 @@ class TowerLoopAction(CustomAction):
         elif state == "go_up":
             self._shop_done_this_room = False      # 進入下一層，重置旗標
             self._strengthen_done_this_room = False
+            self._current_floor += 1
+            print(f"[tower_loop] going up, now floor {self._current_floor}")
             self._click_hit(context, img, "塔_偵測_上樓")
             time.sleep(2.0)  # 換層動畫較長
 
@@ -397,7 +416,7 @@ class TowerLoopAction(CustomAction):
         若無命中且有優先清單，最多重置 2 次後再選。
         """
         self._priority_dict = priority_dict  # 供 _find_priority_card 使用
-        MAX_BUFF_REROLLS = 2
+        MAX_BUFF_REROLLS = 1 if self._pro_mode else 2
         reroll_count = 0
 
         while True:
@@ -406,8 +425,28 @@ class TowerLoopAction(CustomAction):
             if target_box is not None:
                 break  # 找到優先卡，直接選
 
-            # 無命中：有優先清單且還有重置次數 → 重置後重掃
+            # 無命中：判斷是否觸發重置
+            should_reroll = False
             if priority_dict and reroll_count < MAX_BUFF_REROLLS:
+                if self._pro_mode:
+                    # Pro 模式：只有 P3 全未命中才重置
+                    p3_list = priority_dict.get(3, [])
+                    if p3_list:
+                        saved = self._priority_dict
+                        self._priority_dict = {3: p3_list}
+                        p3_hit = self._find_priority_card(context, img)
+                        self._priority_dict = saved
+                        if p3_hit is None:
+                            should_reroll = True
+                            print("[tower_loop] PRO: no P3 found, triggering reroll")
+                        else:
+                            print("[tower_loop] PRO: P3 hit found, skip reroll")
+                    # 無 P3 清單 → 不觸發重置
+                else:
+                    # 一般模式：任何未命中就重置
+                    should_reroll = True
+
+            if should_reroll:
                 print(f"[tower_loop] no priority match, rerolling buff ({reroll_count + 1}/{MAX_BUFF_REROLLS})")
                 self._try_reroll_buff(context)
                 reroll_count += 1
@@ -493,8 +532,15 @@ class TowerLoopAction(CustomAction):
 
         img = context.tasker.controller.post_screencap().wait().get()
 
-        if self._shop_visit_count <= 2 and not self._hit(context, img, "塔_商店_幣數六五零以上"):
-            print(f"[tower_loop] shop reroll skipped: visit #{self._shop_visit_count} coins < 650")
+        if self._pro_mode:
+            coin_node = "塔_商店_幣數千以上"
+            min_label = 1000
+        else:
+            coin_node = "塔_商店_幣數六五零以上"
+            min_label = 650
+
+        if self._shop_visit_count <= 2 and not self._hit(context, img, coin_node):
+            print(f"[tower_loop] shop reroll skipped: visit #{self._shop_visit_count} coins below {min_label}")
             return False
 
         result = context.run_recognition("塔_商店_重置按鈕", img)
@@ -557,13 +603,18 @@ class TowerLoopAction(CustomAction):
         if is_note:
             # 音符類：只買已激活（與隊伍相關）的音符；未激活的沒有效益，跳過
             is_activated = self._hit(context, img, "塔_商店_音符激活")
-            if is_activated:
-                print(f"[tower_loop] grid {grid_idx}: activated note, buying")
-                self._do_buy(context)
-                return True
-            print(f"[tower_loop] grid {grid_idx}: unactivated note, skip")
-            self._close_detail(context, img)
-            return False
+            if not is_activated:
+                print(f"[tower_loop] grid {grid_idx}: unactivated note, skip")
+                self._close_detail(context, img)
+                return False
+            # Pro 模式：激活音符也只買有折扣的（原價 CP 極低）
+            if self._pro_mode and not has_discount:
+                print(f"[tower_loop] grid {grid_idx}: activated note (no discount), PRO skip")
+                self._close_detail(context, img)
+                return False
+            print(f"[tower_loop] grid {grid_idx}: activated note, buying")
+            self._do_buy(context)
+            return True
 
         print(f"[tower_loop] grid {grid_idx}: skip (not buff or note)")
         self._close_detail(context, img)

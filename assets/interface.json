@@ -169,6 +169,28 @@
             "option": [
                 "爬塔作業"
             ]
+        },
+        {
+            "name": "Pro養成爬塔（實驗性）",
+            "entry": "星塔_入口",
+            "description": "Pro養成模式：僅買折扣音符、1000幣以上才重置商店、Buff重置更保守（僅P3未命中時）。策略貼近資深玩家手法。",
+            "repeatable": true,
+            "repeat_count": 1,
+            "option": [
+                "属性塔",
+                "速刷",
+                "爬塔作業_Pro"
+            ]
+        },
+        {
+            "name": "Pro養成接續爬塔（實驗性）",
+            "entry": "星塔_爬塔流程",
+            "description": "已在塔內時直接接續執行 Pro養成模式。",
+            "repeatable": true,
+            "repeat_count": 1,
+            "option": [
+                "爬塔作業_Pro"
+            ]
         }
     ],
     "option": {
@@ -1386,6 +1408,134 @@
                                 "param": {
                                     "custom_action": "tower_loop",
                                     "custom_action_param": "xiya_miniewa_tiliya_xuetu.json"
+                                }
+                            }
+                        },
+                        "星塔_選隊伍": {
+                            "action": {
+                                "type": "Custom",
+                                "param": {
+                                    "custom_action": "team_select",
+                                    "custom_action_param": "xiya_miniewa_tiliya_xuetu.json"
+                                }
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "爬塔作業_Pro": {
+            "type": "select",
+            "label": "選擇Pro養成作業",
+            "description": "選擇要套用的隊伍Buff優先級作業（Pro模式：僅折扣音符、1000幣重置商店、僅P3未命中才重置Buff）",
+            "default_case": "千都世+蒼蘭+特麗莎（水）",
+            "cases": [
+                {
+                    "name": "千都世+蒼蘭+特麗莎（水）",
+                    "label": "千都世+蒼蘭+特麗莎（水）",
+                    "pipeline_override": {
+                        "星塔_爬塔流程": {
+                            "action": {
+                                "type": "Custom",
+                                "param": {
+                                    "custom_action": "tower_loop",
+                                    "custom_action_param": "{\"preset_file\": \"qiandushi-water.json\", \"pro_mode\": true}"
+                                }
+                            }
+                        },
+                        "星塔_選隊伍": {
+                            "action": {
+                                "type": "Custom",
+                                "param": {
+                                    "custom_action": "team_select",
+                                    "custom_action_param": "qiandushi-water.json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "希婭+密捏瓦+緹莉婭（夜兔流）",
+                    "label": "希婭+密捏瓦+緹莉婭（夜兔流）",
+                    "pipeline_override": {
+                        "星塔_爬塔流程": {
+                            "action": {
+                                "type": "Custom",
+                                "param": {
+                                    "custom_action": "tower_loop",
+                                    "custom_action_param": "{\"preset_file\": \"xiya_miniewa_tiliya_yetuliu.json\", \"pro_mode\": true}"
+                                }
+                            }
+                        },
+                        "星塔_選隊伍": {
+                            "action": {
+                                "type": "Custom",
+                                "param": {
+                                    "custom_action": "team_select",
+                                    "custom_action_param": "xiya_miniewa_tiliya_yetuliu.json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "風影+夏花+杏子（風隊普攻流）",
+                    "label": "風影+夏花+杏子（風隊普攻流）",
+                    "pipeline_override": {
+                        "星塔_爬塔流程": {
+                            "action": {
+                                "type": "Custom",
+                                "param": {
+                                    "custom_action": "tower_loop",
+                                    "custom_action_param": "{\"preset_file\": \"fengying_xiahua_xingzi_pugong.json\", \"pro_mode\": true}"
+                                }
+                            }
+                        },
+                        "星塔_選隊伍": {
+                            "action": {
+                                "type": "Custom",
+                                "param": {
+                                    "custom_action": "team_select",
+                                    "custom_action_param": "fengying_xiahua_xingzi_pugong.json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "翡冷翠+縹莉姬+珂賽特（技傷流）",
+                    "label": "翡冷翠+縹莉姬+珂賽特（技傷流）",
+                    "pipeline_override": {
+                        "星塔_爬塔流程": {
+                            "action": {
+                                "type": "Custom",
+                                "param": {
+                                    "custom_action": "tower_loop",
+                                    "custom_action_param": "{\"preset_file\": \"feilengcui_piaoliji_kesaite_jishang.json\", \"pro_mode\": true}"
+                                }
+                            }
+                        },
+                        "星塔_選隊伍": {
+                            "action": {
+                                "type": "Custom",
+                                "param": {
+                                    "custom_action": "team_select",
+                                    "custom_action_param": "feilengcui_piaoliji_kesaite_jishang.json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "希婭+密捏瓦+緹莉婭（雪兔流）",
+                    "label": "希婭+密捏瓦+緹莉婭（雪兔流）",
+                    "pipeline_override": {
+                        "星塔_爬塔流程": {
+                            "action": {
+                                "type": "Custom",
+                                "param": {
+                                    "custom_action": "tower_loop",
+                                    "custom_action_param": "{\"preset_file\": \"xiya_miniewa_tiliya_xuetu.json\", \"pro_mode\": true}"
                                 }
                             }
                         },
