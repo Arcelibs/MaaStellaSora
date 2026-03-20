@@ -1439,7 +1439,7 @@
                                 "type": "Custom",
                                 "param": {
                                     "custom_action": "tower_loop",
-                                    "custom_action_param": "{\"preset_file\": \"qiandushi-water.json\", \"pro_mode\": true}"
+                                    "custom_action_param": "pro:qiandushi-water.json"
                                 }
                             }
                         },
@@ -1463,7 +1463,7 @@
                                 "type": "Custom",
                                 "param": {
                                     "custom_action": "tower_loop",
-                                    "custom_action_param": "{\"preset_file\": \"xiya_miniewa_tiliya_yetuliu.json\", \"pro_mode\": true}"
+                                    "custom_action_param": "pro:xiya_miniewa_tiliya_yetuliu.json"
                                 }
                             }
                         },
@@ -1487,7 +1487,7 @@
                                 "type": "Custom",
                                 "param": {
                                     "custom_action": "tower_loop",
-                                    "custom_action_param": "{\"preset_file\": \"fengying_xiahua_xingzi_pugong.json\", \"pro_mode\": true}"
+                                    "custom_action_param": "pro:fengying_xiahua_xingzi_pugong.json"
                                 }
                             }
                         },
@@ -1511,7 +1511,7 @@
                                 "type": "Custom",
                                 "param": {
                                     "custom_action": "tower_loop",
-                                    "custom_action_param": "{\"preset_file\": \"feilengcui_piaoliji_kesaite_jishang.json\", \"pro_mode\": true}"
+                                    "custom_action_param": "pro:feilengcui_piaoliji_kesaite_jishang.json"
                                 }
                             }
                         },
@@ -1535,7 +1535,7 @@
                                 "type": "Custom",
                                 "param": {
                                     "custom_action": "tower_loop",
-                                    "custom_action_param": "{\"preset_file\": \"xiya_miniewa_tiliya_xuetu.json\", \"pro_mode\": true}"
+                                    "custom_action_param": "pro:xiya_miniewa_tiliya_xuetu.json"
                                 }
                             }
                         },

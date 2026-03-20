@@ -43,32 +43,25 @@ def _load_preset(param_raw: Any) -> Tuple[Dict[int, List[str]], Dict]:
             return {}, {}
         if param_raw.startswith("{"):
             parsed = json.loads(param_raw)
-            # Pro 模式：{"preset_file": "xxx.json", "pro_mode": true}
-            if isinstance(parsed, dict) and "preset_file" in parsed:
-                pro_mode_flag = parsed.get("pro_mode", False)
-                filename = parsed["preset_file"]
-                agent_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-                preset_path = os.path.join(agent_dir, "presets", filename)
-                print(f"[tower_loop] loading preset (pro_mode={pro_mode_flag}): {preset_path!r}")
-                with open(preset_path, "r", encoding="utf-8-sig") as f:
-                    parsed = json.load(f)
-                if not isinstance(parsed.get("config"), dict):
-                    parsed["config"] = {}
-                if pro_mode_flag:
-                    parsed["config"]["pro_mode"] = True
         else:
-            filename = param_raw
-            if param_raw.startswith('"'):
+            # Pro 模式：以 "pro:" 為前綴，例如 "pro:qiandushi-water.json"
+            pro_mode_flag = param_raw.startswith("pro:")
+            filename = param_raw[4:] if pro_mode_flag else param_raw
+            if filename.startswith('"'):
                 try:
-                    filename = json.loads(param_raw)
+                    filename = json.loads(filename)
                 except Exception:
                     pass
             # agent/custom/action/ → agent/
             agent_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             preset_path = os.path.join(agent_dir, "presets", filename)
-            print(f"[tower_loop] loading preset: {preset_path!r}")
+            print(f"[tower_loop] loading preset (pro_mode={pro_mode_flag}): {preset_path!r}")
             with open(preset_path, "r", encoding="utf-8-sig") as f:
                 parsed = json.load(f)
+            if pro_mode_flag:
+                if not isinstance(parsed.get("config"), dict):
+                    parsed["config"] = {}
+                parsed["config"]["pro_mode"] = True
     else:
         parsed = param_raw
 
