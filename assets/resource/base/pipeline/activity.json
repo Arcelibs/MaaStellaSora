@@ -90,8 +90,7 @@
         "threshold": 0.9
       },
       "type": "TemplateMatch"
-    },
-    "post_wait_freezes": 500
+    }
   },
   "活动_添加战斗次数": {
     "action": {
@@ -134,7 +133,9 @@
         ]
       },
       "type": "OCR"
-    }
+    },
+    "pre_wait_freezes": 500,
+    "post_wait_freezes": 200
   },
   "活动_选择活动难度": {
     "action": {
@@ -151,7 +152,8 @@
         ]
       },
       "type": "OCR"
-    }
+    },
+    "post_wait_freezes": 100
   },
   "活动_确认": {
     "action": {
@@ -184,7 +186,7 @@
     "recognition": {
       "param": {
         "expected": [
-          "深入温室的调查I"
+          "1-2"
         ],
         "replace": [
           ["Ⅰ", "I"],
@@ -199,6 +201,6 @@
       },
       "type": "OCR"
     },
-    "post_delay": 1000
+    "post_wait_freezes": 100
   }
 }
