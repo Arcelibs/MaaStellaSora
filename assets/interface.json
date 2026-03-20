@@ -45,16 +45,16 @@
     ],
     "resource": [
         {
-            "name": "官服",
-            "path": [
-                "{PROJECT_DIR}/resource/base"
-            ]
-        },
-        {
             "name": "台服",
             "path": [
                 "{PROJECT_DIR}/resource/base",
                 "{PROJECT_DIR}/resource/tw"
+            ]
+        },
+        {
+            "name": "官服",
+            "path": [
+                "{PROJECT_DIR}/resource/base"
             ]
         },
         {
