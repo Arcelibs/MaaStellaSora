@@ -131,7 +131,7 @@ class TowerLoopAction(CustomAction):
         self._pro_mode = config.get("pro_mode", False)
         self._current_floor = 0
         if self._pro_mode:
-            print("[tower_loop] PRO MODE enabled — discount-only notes, 1000 coin reroll, conservative buff reroll")
+            print("[tower_loop] PRO MODE enabled — no notes, aggressive buff buy, floor-gated shop reroll")
 
         while not context.tasker.stopping:
             if time.time() - start > self.TIMEOUT:
@@ -529,15 +529,19 @@ class TowerLoopAction(CustomAction):
         img = context.tasker.controller.post_screencap().wait().get()
 
         if self._pro_mode:
-            coin_node = "塔_商店_幣數千以上"
-            min_label = 1000
+            # Pro 模式：前期不刷新（刷一次等於虧一個潛能），後期有餘力才刷
+            reroll_floor = self._config.get("reroll_from_floor", 10)
+            if self._current_floor < reroll_floor:
+                print(f"[tower_loop] shop reroll skipped (PRO): floor {self._current_floor} < {reroll_floor}")
+                return False
+            # 後期樓層：幣 >= 650 才刷
+            if not self._hit(context, img, "塔_商店_幣數六五零以上"):
+                print(f"[tower_loop] shop reroll skipped (PRO): late floor but coins < 650")
+                return False
         else:
-            coin_node = "塔_商店_幣數六五零以上"
-            min_label = 650
-
-        if self._shop_visit_count <= 2 and not self._hit(context, img, coin_node):
-            print(f"[tower_loop] shop reroll skipped: visit #{self._shop_visit_count} coins below {min_label}")
-            return False
+            if self._shop_visit_count <= 2 and not self._hit(context, img, "塔_商店_幣數六五零以上"):
+                print(f"[tower_loop] shop reroll skipped: visit #{self._shop_visit_count} coins < 650")
+                return False
 
         result = context.run_recognition("塔_商店_重置按鈕", img)
         if not (result and result.hit and result.best_result):
@@ -587,7 +591,12 @@ class TowerLoopAction(CustomAction):
         has_discount = self._hit(context, img, "塔_商店_優惠")
 
         if is_buff:
-            # buff 類（潛能特飲等）：有折扣才買（無折扣要200幣，不划算）
+            if self._pro_mode:
+                # Pro 模式：積極買潛能（打折 + 原價 200 都買），多買潛能是養成關鍵
+                print(f"[tower_loop] grid {grid_idx}: buff ({'discounted' if has_discount else 'full price'}), PRO buying")
+                self._do_buy(context)
+                return True
+            # 一般模式：有折扣才買（無折扣要200幣，不划算）
             if has_discount:
                 print(f"[tower_loop] grid {grid_idx}: buff (discounted), buying")
                 self._do_buy(context)
@@ -597,15 +606,15 @@ class TowerLoopAction(CustomAction):
             return False
 
         if is_note:
-            # 音符類：只買已激活（與隊伍相關）的音符；未激活的沒有效益，跳過
+            if self._pro_mode:
+                # Pro 模式：完全不買音符（音符提升小，目標是湊 6 個 Lv1 技能觸發）
+                print(f"[tower_loop] grid {grid_idx}: note, PRO skip (never buy notes)")
+                self._close_detail(context, img)
+                return False
+            # 一般模式：只買已激活的音符；未激活的沒有效益
             is_activated = self._hit(context, img, "塔_商店_音符激活")
             if not is_activated:
                 print(f"[tower_loop] grid {grid_idx}: unactivated note, skip")
-                self._close_detail(context, img)
-                return False
-            # Pro 模式：激活音符也只買有折扣的（原價 CP 極低）
-            if self._pro_mode and not has_discount:
-                print(f"[tower_loop] grid {grid_idx}: activated note (no discount), PRO skip")
                 self._close_detail(context, img)
                 return False
             print(f"[tower_loop] grid {grid_idx}: activated note, buying")
