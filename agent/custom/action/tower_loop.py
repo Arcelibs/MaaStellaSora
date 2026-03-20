@@ -293,8 +293,9 @@ class TowerLoopAction(CustomAction):
         elif state == "shop_main":
             self._shop_visit_count += 1
             print(f"[tower_loop] shop visit #{self._shop_visit_count}")
-            self._handle_shop_main(context, img)
-            self._shop_done_this_room = True  # 購物完成，本房間不再重複進入
+            completed = self._handle_shop_main(context, img)
+            if completed:
+                self._shop_done_this_room = True  # 正常走完才標記，提前關閉（買buff後彈視窗）不標記
 
         elif state == "dialogue":
             self._click_hit(context, img, "星塔_节点_对话")
@@ -448,8 +449,13 @@ class TowerLoopAction(CustomAction):
         self._click_hit(context, img, "塔_偵測_商店節點")
         time.sleep(2.0)  # 等商店主界面打開
 
-    def _handle_shop_main(self, context: Context, img):
-        """商店主界面：掃描 8 格，買有折扣的 buff / 音符；幣多則重置繼續買。"""
+    def _handle_shop_main(self, context: Context, img) -> bool:
+        """商店主界面：掃描 8 格，買有折扣的 buff / 音符；幣多則重置繼續買。
+
+        Returns:
+            True  — 正常掃完並離開商店
+            False — 商店中途自動關閉（買 buff 後彈出選卡畫面等），交由主迴圈處理
+        """
         for reroll_round in range(3):  # 最多原始 + 2 次重置
             items_bought = 0
             shop_closed_early = False
@@ -464,7 +470,7 @@ class TowerLoopAction(CustomAction):
                     items_bought += 1
 
             if shop_closed_early:
-                return  # 商店已自動關閉，交由主迴圈處理
+                return False  # 商店已自動關閉，交由主迴圈處理
 
             # 本輪掃完：嘗試重置（幣帶不走，積極花）
             if reroll_round < 2 and self._try_reroll_shop(context):
@@ -476,6 +482,7 @@ class TowerLoopAction(CustomAction):
 
         time.sleep(0.5)
         self._exit_shop_main(context)
+        return True
 
     def _try_reroll_shop(self, context: Context) -> bool:
         """嘗試點擊商店重置按鈕。若成功回傳 True，無法重置回傳 False。"""
