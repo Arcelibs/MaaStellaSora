@@ -44,14 +44,17 @@ def _load_preset(param_raw: Any) -> Tuple[Dict[int, List[str]], Dict]:
         if param_raw.startswith("{"):
             parsed = json.loads(param_raw)
         else:
-            # Pro 模式：以 "pro:" 為前綴，例如 "pro:qiandushi-water.json"
-            pro_mode_flag = param_raw.startswith("pro:")
-            filename = param_raw[4:] if pro_mode_flag else param_raw
+            # 先去掉外層引號（MaaFramework 有時會多包一層）
+            filename = param_raw
             if filename.startswith('"'):
                 try:
                     filename = json.loads(filename)
                 except Exception:
                     pass
+            # Pro 模式：以 "pro:" 為前綴，例如 "pro:qiandushi-water.json"
+            pro_mode_flag = filename.startswith("pro:")
+            if pro_mode_flag:
+                filename = filename[4:]
             # agent/custom/action/ → agent/
             agent_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             preset_path = os.path.join(agent_dir, "presets", filename)
