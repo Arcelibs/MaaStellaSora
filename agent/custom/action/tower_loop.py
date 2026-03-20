@@ -256,6 +256,16 @@ class TowerLoopAction(CustomAction):
         result = context.run_recognition(node, img)
         return bool(result and result.hit)
 
+    def _coin_tier(self, context: Context, img) -> str:
+        """回傳商店幣數區間字串，用於 Pro 模式 log。"""
+        if self._hit(context, img, "塔_商店_幣數千五以上"):
+            return "≥1500"
+        if self._hit(context, img, "塔_商店_幣數千以上"):
+            return "1000~1499"
+        if self._hit(context, img, "塔_商店_幣數六五零以上"):
+            return "650~999"
+        return "<650"
+
     # ──────────────────────────────────────────────────────────────
     # 狀態分派
     # ──────────────────────────────────────────────────────────────
@@ -509,10 +519,16 @@ class TowerLoopAction(CustomAction):
 
             # 本輪掃完：嘗試重置（幣帶不走，積極花）
             if reroll_round < 2 and self._try_reroll_shop(context):
-                print(f"[tower_loop] shop rerolled (round {reroll_round + 1}, bought {items_bought})")
+                if self._pro_mode:
+                    print(f"[PRO] F{self._current_floor} 商店第{reroll_round + 1}輪結束：買{items_bought}件 → 刷新繼續")
+                else:
+                    print(f"[tower_loop] shop rerolled (round {reroll_round + 1}, bought {items_bought})")
                 time.sleep(1.5)  # 等重置動畫
             else:
-                print(f"[tower_loop] shop done (round {reroll_round}, bought {items_bought})")
+                if self._pro_mode:
+                    print(f"[PRO] F{self._current_floor} 商店結束：第{reroll_round + 1}輪 買{items_bought}件 → 離開")
+                else:
+                    print(f"[tower_loop] shop done (round {reroll_round}, bought {items_bought})")
                 break  # 沒東西買或無法重置，結束
 
         time.sleep(0.5)
@@ -531,13 +547,15 @@ class TowerLoopAction(CustomAction):
         if self._pro_mode:
             # Pro 模式：前期不刷新（刷一次等於虧一個潛能），後期有餘力才刷
             reroll_floor = self._config.get("reroll_from_floor", 10)
+            tier = self._coin_tier(context, img)
             if self._current_floor < reroll_floor:
-                print(f"[tower_loop] shop reroll skipped (PRO): floor {self._current_floor} < {reroll_floor}")
+                print(f"[PRO] F{self._current_floor} 商店刷新 幣={tier} → 跳過(前期省幣, 門檻F{reroll_floor})")
                 return False
             # 後期樓層：幣 >= 650 才刷
             if not self._hit(context, img, "塔_商店_幣數六五零以上"):
-                print(f"[tower_loop] shop reroll skipped (PRO): late floor but coins < 650")
+                print(f"[PRO] F{self._current_floor} 商店刷新 幣={tier} → 跳過(幣不足650)")
                 return False
+            print(f"[PRO] F{self._current_floor} 商店刷新 幣={tier} → 執行")
         else:
             if self._shop_visit_count <= 2 and not self._hit(context, img, "塔_商店_幣數六五零以上"):
                 print(f"[tower_loop] shop reroll skipped: visit #{self._shop_visit_count} coins < 650")
@@ -593,7 +611,9 @@ class TowerLoopAction(CustomAction):
         if is_buff:
             if self._pro_mode:
                 # Pro 模式：積極買潛能（打折 + 原價 200 都買），多買潛能是養成關鍵
-                print(f"[tower_loop] grid {grid_idx}: buff ({'discounted' if has_discount else 'full price'}), PRO buying")
+                tier = self._coin_tier(context, img)
+                price_tag = "折扣" if has_discount else "原價"
+                print(f"[PRO] F{self._current_floor} 格{grid_idx} 潛能({price_tag}) 幣={tier} → 購買")
                 self._do_buy(context)
                 return True
             # 一般模式：有折扣才買（無折扣要200幣，不划算）
@@ -608,7 +628,11 @@ class TowerLoopAction(CustomAction):
         if is_note:
             if self._pro_mode:
                 # Pro 模式：完全不買音符（音符提升小，目標是湊 6 個 Lv1 技能觸發）
-                print(f"[tower_loop] grid {grid_idx}: note, PRO skip (never buy notes)")
+                tier = self._coin_tier(context, img)
+                is_activated = self._hit(context, img, "塔_商店_音符激活")
+                activated_tag = "已激活" if is_activated else "未激活"
+                discount_tag = "折扣" if has_discount else "原價"
+                print(f"[PRO] F{self._current_floor} 格{grid_idx} 音符({activated_tag}/{discount_tag}) 幣={tier} → 跳過(Pro不買音符)")
                 self._close_detail(context, img)
                 return False
             # 一般模式：只買已激活的音符；未激活的沒有效益
