@@ -10,6 +10,7 @@ TowerLoopAction — 台服星塔爬塔主迴圈
 """
 
 import json
+import logging
 import os
 import time
 from typing import Any, Dict, List, Optional, Tuple
@@ -17,6 +18,33 @@ from typing import Any, Dict, List, Optional, Tuple
 from maa.agent.agent_server import AgentServer
 from maa.context import Context
 from maa.custom_action import CustomAction
+
+
+# ──────────────────────────────────────────────────────────────────
+# Pro 模式獨立 log（輸出到 debug/pro_tower.log）
+# ──────────────────────────────────────────────────────────────────
+
+def _get_pro_logger() -> logging.Logger:
+    """回傳 Pro 模式專用 logger，首次呼叫時初始化 FileHandler。
+    log 檔位於：<安裝根目錄>/debug/pro_tower.log
+    """
+    logger = logging.getLogger("pro_tower")
+    if logger.handlers:
+        return logger
+    # tower_loop.py → action/ → custom/ → agent/ → <root>
+    root_dir = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    )
+    debug_dir = os.path.join(root_dir, "debug")
+    os.makedirs(debug_dir, exist_ok=True)
+    log_path = os.path.join(debug_dir, "pro_tower.log")
+    handler = logging.FileHandler(log_path, encoding="utf-8")
+    handler.setFormatter(logging.Formatter(
+        "%(asctime)s  %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+    ))
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+    return logger
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -132,6 +160,8 @@ class TowerLoopAction(CustomAction):
         self._current_floor = 0
         if self._pro_mode:
             print("[tower_loop] PRO MODE enabled — no notes, aggressive buff buy, floor-gated shop reroll")
+            _get_pro_logger().info("=" * 60)
+            _get_pro_logger().info(f"PRO MODE 開始  priorities={sorted(priority_dict.keys(), reverse=True)}")
 
         while not context.tasker.stopping:
             if time.time() - start > self.TIMEOUT:
@@ -251,6 +281,11 @@ class TowerLoopAction(CustomAction):
             return "dialogue_ignore"
 
         return "unknown"
+
+    def _pro_log(self, msg: str):
+        """同時輸出到 MaaFramework stdout 與獨立的 pro_tower.log。"""
+        print(f"[PRO] {msg}")
+        _get_pro_logger().info(msg)
 
     def _hit(self, context: Context, img, node: str) -> bool:
         result = context.run_recognition(node, img)
@@ -520,13 +555,13 @@ class TowerLoopAction(CustomAction):
             # 本輪掃完：嘗試重置（幣帶不走，積極花）
             if reroll_round < 2 and self._try_reroll_shop(context):
                 if self._pro_mode:
-                    print(f"[PRO] F{self._current_floor} 商店第{reroll_round + 1}輪結束：買{items_bought}件 → 刷新繼續")
+                    self._pro_log(f"F{self._current_floor} 商店第{reroll_round + 1}輪結束：買{items_bought}件 → 刷新繼續")
                 else:
                     print(f"[tower_loop] shop rerolled (round {reroll_round + 1}, bought {items_bought})")
                 time.sleep(1.5)  # 等重置動畫
             else:
                 if self._pro_mode:
-                    print(f"[PRO] F{self._current_floor} 商店結束：第{reroll_round + 1}輪 買{items_bought}件 → 離開")
+                    self._pro_log(f"F{self._current_floor} 商店結束：第{reroll_round + 1}輪 買{items_bought}件 → 離開")
                 else:
                     print(f"[tower_loop] shop done (round {reroll_round}, bought {items_bought})")
                 break  # 沒東西買或無法重置，結束
@@ -549,13 +584,13 @@ class TowerLoopAction(CustomAction):
             reroll_floor = self._config.get("reroll_from_floor", 10)
             tier = self._coin_tier(context, img)
             if self._current_floor < reroll_floor:
-                print(f"[PRO] F{self._current_floor} 商店刷新 幣={tier} → 跳過(前期省幣, 門檻F{reroll_floor})")
+                self._pro_log(f"F{self._current_floor} 商店刷新 幣={tier} → 跳過(前期省幣, 門檻F{reroll_floor})")
                 return False
             # 後期樓層：幣 >= 650 才刷
             if not self._hit(context, img, "塔_商店_幣數六五零以上"):
-                print(f"[PRO] F{self._current_floor} 商店刷新 幣={tier} → 跳過(幣不足650)")
+                self._pro_log(f"F{self._current_floor} 商店刷新 幣={tier} → 跳過(幣不足650)")
                 return False
-            print(f"[PRO] F{self._current_floor} 商店刷新 幣={tier} → 執行")
+            self._pro_log(f"F{self._current_floor} 商店刷新 幣={tier} → 執行")
         else:
             if self._shop_visit_count <= 2 and not self._hit(context, img, "塔_商店_幣數六五零以上"):
                 print(f"[tower_loop] shop reroll skipped: visit #{self._shop_visit_count} coins < 650")
@@ -613,7 +648,7 @@ class TowerLoopAction(CustomAction):
                 # Pro 模式：積極買潛能（打折 + 原價 200 都買），多買潛能是養成關鍵
                 tier = self._coin_tier(context, img)
                 price_tag = "折扣" if has_discount else "原價"
-                print(f"[PRO] F{self._current_floor} 格{grid_idx} 潛能({price_tag}) 幣={tier} → 購買")
+                self._pro_log(f"F{self._current_floor} 格{grid_idx} 潛能({price_tag}) 幣={tier} → 購買")
                 self._do_buy(context)
                 return True
             # 一般模式：有折扣才買（無折扣要200幣，不划算）
@@ -632,7 +667,7 @@ class TowerLoopAction(CustomAction):
                 is_activated = self._hit(context, img, "塔_商店_音符激活")
                 activated_tag = "已激活" if is_activated else "未激活"
                 discount_tag = "折扣" if has_discount else "原價"
-                print(f"[PRO] F{self._current_floor} 格{grid_idx} 音符({activated_tag}/{discount_tag}) 幣={tier} → 跳過(Pro不買音符)")
+                self._pro_log(f"F{self._current_floor} 格{grid_idx} 音符({activated_tag}/{discount_tag}) 幣={tier} → 跳過(Pro不買音符)")
                 self._close_detail(context, img)
                 return False
             # 一般模式：只買已激活的音符；未激活的沒有效益
