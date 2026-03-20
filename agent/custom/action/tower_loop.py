@@ -291,6 +291,15 @@ class TowerLoopAction(CustomAction):
         result = context.run_recognition(node, img)
         return bool(result and result.hit)
 
+    def _read_strengthen_cost(self, context: Context, img) -> str:
+        """讀取強化費用文字，回傳 '免費'/'60'/'120'/'180'/'260'/'?'。"""
+        reco = context.run_recognition("塔_強化_費用", img)
+        if reco and reco.hit and reco.best_result:
+            text = getattr(reco.best_result, "text", None)
+            if text:
+                return text.strip()
+        return "?"
+
     def _coin_tier(self, context: Context, img) -> str:
         """回傳商店幣數區間字串，用於 Pro 模式 log。"""
         if self._hit(context, img, "塔_商店_幣數千五以上"):
@@ -322,15 +331,28 @@ class TowerLoopAction(CustomAction):
             time.sleep(0.8)
 
         elif state == "strengthen_available":
+            cost = self._read_strengthen_cost(context, img)
             self._strengthen_done_this_room = True  # 點了就標記，避免無限迴圈
-            self._click_hit(context, img, "塔_偵測_強化可用")
-            time.sleep(1.5)  # 等強化選卡 UI 打開或錯誤彈窗
-            # 若幣不夠（付費強化但幣為0），彈窗會出現，關掉即可
-            img2 = context.tasker.controller.post_screencap().wait().get()
-            if self._hit(context, img2, "塔_商店_錢不夠"):
-                print("[tower_loop] strengthen too expensive, dismissing")
-                context.tasker.controller.post_click(640, 400).wait()
-                time.sleep(0.5)
+
+            if self._pro_mode and cost == "260":
+                # Pro 模式：跳過 260 幣強化（攻略：極少數情況才選 260）
+                self._pro_log(f"F{self._current_floor} 強化 費用={cost} → 跳過(Pro省幣)")
+            else:
+                if self._pro_mode:
+                    self._pro_log(f"F{self._current_floor} 強化 費用={cost} → 執行")
+                else:
+                    print(f"[tower_loop] strengthen cost={cost}, proceeding")
+                self._click_hit(context, img, "塔_偵測_強化可用")
+                time.sleep(1.5)  # 等強化選卡 UI 打開或錯誤彈窗
+                # 若幣不夠（付費強化但幣為0），彈窗會出現，關掉即可
+                img2 = context.tasker.controller.post_screencap().wait().get()
+                if self._hit(context, img2, "塔_商店_錢不夠"):
+                    if self._pro_mode:
+                        self._pro_log(f"F{self._current_floor} 強化 費用={cost} → 幣不夠，取消")
+                    else:
+                        print("[tower_loop] strengthen too expensive, dismissing")
+                    context.tasker.controller.post_click(640, 400).wait()
+                    time.sleep(0.5)
 
         elif state == "strengthen_card":
             self._handle_strengthen_card(context, img, priority_dict)

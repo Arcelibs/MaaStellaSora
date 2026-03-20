@@ -119,6 +119,17 @@
         "action": {"type": "DoNothing"}
     },
 
+    "塔_強化_費用": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": ["免費", "免费", "60", "120", "180", "260"],
+                "roi": [200, 280, 880, 240]
+            }
+        },
+        "action": {"type": "DoNothing"}
+    },
+
     "塔_偵測_上樓": {
         "recognition": {
             "type": "OCR",
