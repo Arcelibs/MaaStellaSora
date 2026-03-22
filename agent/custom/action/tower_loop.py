@@ -7,44 +7,18 @@ TowerLoopAction — 台服星塔爬塔主迴圈
 - 修正 星塔_保存紀錄 不當退出的 bug
 - buff 選擇 + 拿走 在同一個 atomic 操作中完成
 - 商店購物、強化、上樓等狀態全部在 Python 中處理
+- 融合上游精華：OCR 重試、幣數直讀、模糊匹配、最終商店策略
 """
 
 import json
-import logging
 import os
+import re
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from maa.agent.agent_server import AgentServer
 from maa.context import Context
 from maa.custom_action import CustomAction
-
-
-# ──────────────────────────────────────────────────────────────────
-# Pro 模式獨立 log（輸出到 debug/pro_tower.log）
-# ──────────────────────────────────────────────────────────────────
-
-def _get_pro_logger() -> logging.Logger:
-    """回傳 Pro 模式專用 logger，首次呼叫時初始化 FileHandler。
-    log 檔位於：<安裝根目錄>/debug/pro_tower.log
-    """
-    logger = logging.getLogger("pro_tower")
-    if logger.handlers:
-        return logger
-    # tower_loop.py → action/ → custom/ → agent/ → <root>
-    root_dir = os.path.dirname(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    )
-    debug_dir = os.path.join(root_dir, "debug")
-    os.makedirs(debug_dir, exist_ok=True)
-    log_path = os.path.join(debug_dir, "pro_tower.log")
-    handler = logging.FileHandler(log_path, encoding="utf-8")
-    handler.setFormatter(logging.Formatter(
-        "%(asctime)s  %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
-    ))
-    logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
-    return logger
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -57,7 +31,10 @@ def _load_preset(param_raw: Any) -> Tuple[Dict[int, List[str]], Dict]:
     Returns:
         (priority_dict, config)
         config 支援的欄位：
-          reroll_from_floor (int): 幾樓以上才允許重置商店，預設 1（每層都可重置）
+          skip_shop_rerolls (int): 跳過前 N 次商店的重置
+          strengthen_max_cost (int): 強化費用超過此值跳過（預設 180）
+          strengthen_reserve (int): 購物前預留的幣數（預設 = strengthen_max_cost）
+          verbose_log (bool): 啟用詳細 log
     """
     if param_raw is None:
         return {}, {}
@@ -79,20 +56,12 @@ def _load_preset(param_raw: Any) -> Tuple[Dict[int, List[str]], Dict]:
                     filename = json.loads(filename)
                 except Exception:
                     pass
-            # Pro 模式：以 "pro:" 為前綴，例如 "pro:qiandushi-water.json"
-            pro_mode_flag = filename.startswith("pro:")
-            if pro_mode_flag:
-                filename = filename[4:]
             # agent/custom/action/ → agent/
             agent_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             preset_path = os.path.join(agent_dir, "presets", filename)
-            print(f"[tower_loop] loading preset (pro_mode={pro_mode_flag}): {preset_path!r}")
+            print(f"[tower_loop] loading preset: {preset_path!r}")
             with open(preset_path, "r", encoding="utf-8-sig") as f:
                 parsed = json.load(f)
-            if pro_mode_flag:
-                if not isinstance(parsed.get("config"), dict):
-                    parsed["config"] = {}
-                parsed["config"]["pro_mode"] = True
     else:
         parsed = param_raw
 
@@ -124,6 +93,14 @@ def _box_center(box: Tuple[int, int, int, int]) -> Tuple[int, int]:
     return x + w // 2, y + h // 2
 
 
+_RE_NON_ALNUM = re.compile(r'[\s·・\-—–_!！、，。：:；;（）()\[\]【】「」『』""\'\'\"]+')
+
+
+def _normalize_name(name: str) -> str:
+    """移除空格、標點、特殊符號，保留文字與數字，用於模糊比對。"""
+    return _RE_NON_ALNUM.sub('', name)
+
+
 # 商店 8 格 ROI（格子左上角 x, y, 寬, 高）
 _GRID_ROIS: Dict[int, List[int]] = {
     1: [638, 159, 114, 133],
@@ -152,16 +129,20 @@ class TowerLoopAction(CustomAction):
 
         start = time.time()
         consecutive_unknown = 0
-        self._shop_done_this_room = False      # 每次 run() 重置
+        self._shop_done_this_room = False
         self._strengthen_done_this_room = False
-        self._shop_visit_count = 0             # 商店造訪次數（每次進商店主界面 +1）
-        self._config = config                  # 設定（skip_shop_rerolls 等）
-        self._pro_mode = config.get("pro_mode", False)
+        self._shop_visit_count = 0
+        self._config = config
+        self._verbose = config.get("verbose_log", False)
         self._current_floor = 0
-        if self._pro_mode:
-            print("[tower_loop] PRO MODE enabled — no notes, aggressive buff buy, floor-gated shop reroll")
-            _get_pro_logger().info("=" * 60)
-            _get_pro_logger().info(f"PRO MODE 開始  priorities={sorted(priority_dict.keys(), reverse=True)}")
+        self._is_final_room = False
+
+        # 強化相關設定
+        self._strengthen_max_cost = config.get("strengthen_max_cost", 180)
+        self._strengthen_reserve = config.get("strengthen_reserve", self._strengthen_max_cost)
+
+        if self._verbose:
+            print(f"[tower_loop] verbose log enabled, strengthen_max_cost={self._strengthen_max_cost}, reserve={self._strengthen_reserve}")
 
         while not context.tasker.stopping:
             if time.time() - start > self.TIMEOUT:
@@ -181,7 +162,6 @@ class TowerLoopAction(CustomAction):
                         context.tasker.controller.post_click(cx, cy).wait()
                         print(f"[tower_loop] 確認 clicked at ({cx}, {cy})")
                     else:
-                        # OCR 失敗（簡繁不同或字體問題）→ 固定座標點右側按鈕
                         print("[tower_loop] 確認 OCR failed, fallback click (875, 601)")
                         context.tasker.controller.post_click(875, 601).wait()
                     time.sleep(2.0)
@@ -194,7 +174,7 @@ class TowerLoopAction(CustomAction):
                 if consecutive_unknown >= self.MAX_UNKNOWN:
                     print(f"[tower_loop] {self.MAX_UNKNOWN}x unknown, assuming done")
                     return True
-                time.sleep(1.0)  # 等待畫面過渡
+                time.sleep(1.0)
                 continue
 
             consecutive_unknown = 0
@@ -214,7 +194,7 @@ class TowerLoopAction(CustomAction):
         if self._hit(context, img, "塔_偵測_完成"):
             return "tower_complete"
 
-        # 2. 星塔背包（誤觸背包按鈕：需在 buff 選擇之前偵測，
+        # 2. 星塔背包（需在 buff 選擇之前偵測，
         #    因背包畫面的技能卡綠框可能誤觸 buff 選擇 TemplateMatch）
         if self._hit(context, img, "塔_偵測_星塔背包"):
             return "backpack_screen"
@@ -223,92 +203,135 @@ class TowerLoopAction(CustomAction):
         if self._hit(context, img, "塔_偵測_buff選擇"):
             return "buff_select"
 
-        # 3. 等級提升（進入 buff 選擇前的過渡）
+        # 4. 等級提升（進入 buff 選擇前的過渡）
         if self._hit(context, img, "塔_偵測_等級提升"):
             return "level_up"
 
-        # 4. 點選空白關閉（優先於對話選項：取 buff 後的提示可能誤觸對話選項偵測）
+        # 5. 點選空白關閉（優先於對話選項：取 buff 後的提示可能誤觸對話選項偵測）
         if self._hit(context, img, "塔_偵測_點選空白"):
             return "blank_close"
 
-        # 5. 默契提升（同上，優先排除）
+        # 6. 默契提升（同上，優先排除）
         if self._hit(context, img, "塔_偵測_默契提升"):
             return "harmony_up"
 
-        # 6. 對話選項（有多個可選項）
+        # 7. 對話選項（有多個可選項）
         if self._hit(context, img, "塔_偵測_對話選項"):
             return "dialogue_option"
 
-        # 7. 保存紀錄（點擊但不退出迴圈）
+        # 8. 保存紀錄（點擊但不退出迴圈）
         if self._hit(context, img, "塔_偵測_保存紀錄"):
             return "save_record"
 
-        # 8. 商店節點選擇畫面（優先於上樓/強化，避免在商店選擇畫面直接點上樓）
-        #    已購物後由旗標保護，不會重複進入
+        # 9. 商店節點選擇畫面（優先於上樓/強化）
         if not self._shop_done_this_room and self._hit(context, img, "塔_偵測_商店節點"):
             return "shop_node"
 
-        # 9. 商店主界面（格子購物視圖）
+        # 10. 商店主界面（格子購物視圖）
         if not self._shop_done_this_room and self._hit(context, img, "塔_偵測_商店主界面"):
             return "shop_main"
 
-        # 10. 強化可用（免費或 ≤180 幣）—— 購物完成後才處理，已強化則跳過
+        # 11. 強化可用——購物完成後才處理，已強化則跳過
         if not self._strengthen_done_this_room and self._hit(context, img, "塔_偵測_強化可用"):
             return "strengthen_available"
 
-        # 11. 上樓（商店/強化完成後前往下一層）
+        # 12. 上樓（商店/強化完成後前往下一層）
         if self._hit(context, img, "塔_偵測_上樓"):
             return "go_up"
 
-        # 12. 離開確認彈窗（點「離開星塔」後彈出的確認對話框）
+        # 13. 離開確認彈窗
         if self._hit(context, img, "塔_偵測_離開確認"):
             return "leave_confirm"
 
-        # 13. 最終商店離開星塔
+        # 14. 最終商店離開星塔
         if self._hit(context, img, "塔_偵測_最終離開"):
             return "final_leave"
 
-        # 13. 強化選卡畫面（潛能卡片選擇）
+        # 15. 強化選卡畫面（潛能卡片選擇）
         if self._hit(context, img, "塔_偵測_強化選卡"):
             return "strengthen_card"
 
-        # 14. 對話泡泡（點擊繼續）
+        # 16. 對話泡泡（點擊繼續）
         if self._hit(context, img, "星塔_节点_对话"):
             return "dialogue"
 
-        # 15. 突發事件選項（藍色圓圈按鈕圖示，非預設對話選項的隨機事件）
+        # 17. 突發事件選項（藍色圓圈按鈕圖示）
         if self._hit(context, img, "塔_偵測_突發事件"):
             return "dialogue_ignore"
 
         return "unknown"
 
-    def _pro_log(self, msg: str):
-        """同時輸出到 MaaFramework stdout 與獨立的 pro_tower.log。"""
-        print(f"[PRO] {msg}")
-        _get_pro_logger().info(msg)
+    # ──────────────────────────────────────────────────────────────
+    # 基礎工具
+    # ──────────────────────────────────────────────────────────────
 
     def _hit(self, context: Context, img, node: str) -> bool:
         result = context.run_recognition(node, img)
         return bool(result and result.hit)
 
-    def _read_strengthen_cost(self, context: Context, img) -> str:
-        """讀取強化費用文字，回傳 '免費'/'60'/'120'/'180'/'260'/'?'。"""
-        reco = context.run_recognition("塔_強化_費用", img)
-        if reco and reco.hit and reco.best_result:
-            text = getattr(reco.best_result, "text", None)
-            if text:
-                return text.strip()
-        return "?"
+    def _click_hit(self, context: Context, img, node: str):
+        """偵測節點並點擊命中位置的中心。"""
+        result = context.run_recognition(node, img)
+        if result and result.hit and result.best_result:
+            cx, cy = _box_center(result.best_result.box)
+            context.tasker.controller.post_click(cx, cy).wait()
 
-    def _coin_tier(self, context: Context, img) -> str:
-        """回傳商店幣數區間字串，用於 Pro 模式 log。"""
+    def _ocr_with_retry(self, context: Context, node: str, img=None,
+                        max_tries: int = 3, sleep_sec: float = 0.5):
+        """帶重試的 OCR 辨識。回傳 recognition result 或 None。"""
+        for attempt in range(max_tries):
+            if context.tasker.stopping:
+                return None
+            if img is None or attempt > 0:
+                img = context.tasker.controller.post_screencap().wait().get()
+            result = context.run_recognition(node, img)
+            if result and result.hit and result.best_result:
+                return result
+            if attempt < max_tries - 1:
+                time.sleep(sleep_sec)
+        return None
+
+    def _log(self, msg: str):
+        """verbose log：僅在 verbose_log=true 時輸出詳細資訊。"""
+        if self._verbose:
+            print(f"[tower] F{self._current_floor} {msg}")
+
+    # ──────────────────────────────────────────────────────────────
+    # 幣數與費用讀取
+    # ──────────────────────────────────────────────────────────────
+
+    def _read_coin_amount(self, context: Context, img=None) -> int:
+        """OCR 讀取當前幣數。失敗時回退到區間偵測，最差回傳 0。"""
+        result = self._ocr_with_retry(context, "塔_OCR_幣數", img, max_tries=2)
+        if result:
+            try:
+                text = getattr(result.best_result, "text", "").replace(",", "").strip()
+                return int(text)
+            except (ValueError, AttributeError):
+                pass
+        # fallback: 用既有的區間偵測
+        if img is None:
+            img = context.tasker.controller.post_screencap().wait().get()
         if self._hit(context, img, "塔_商店_幣數千五以上"):
-            return "≥1500"
+            return 1500
         if self._hit(context, img, "塔_商店_幣數千以上"):
-            return "1000~1499"
+            return 1000
         if self._hit(context, img, "塔_商店_幣數六五零以上"):
-            return "650~999"
-        return "<650"
+            return 650
+        return 0
+
+    def _read_strengthen_cost(self, context: Context, img) -> int:
+        """讀取強化費用，回傳整數。免費=0，識別失敗=65535（安全預設：不強化）。"""
+        result = self._ocr_with_retry(context, "塔_強化_費用", img, max_tries=3)
+        if result:
+            text = getattr(result.best_result, "text", "").strip()
+            if "免費" in text or "免费" in text:
+                return 0
+            try:
+                return int(text)
+            except ValueError:
+                pass
+        return 65535
 
     # ──────────────────────────────────────────────────────────────
     # 狀態分派
@@ -320,37 +343,35 @@ class TowerLoopAction(CustomAction):
 
         elif state == "level_up":
             self._click_hit(context, img, "塔_偵測_等級提升")
-            time.sleep(1.0)  # 等級提升動畫
+            time.sleep(1.0)
 
         elif state == "dialogue_option":
             self._handle_dialogue_option(context, img)
 
         elif state == "save_record":
-            # 點存檔但繼續跑（修正原 bug）
             self._click_hit(context, img, "塔_偵測_保存紀錄")
             time.sleep(0.8)
 
         elif state == "strengthen_available":
             cost = self._read_strengthen_cost(context, img)
-            self._strengthen_done_this_room = True  # 點了就標記，避免無限迴圈
+            self._strengthen_done_this_room = True
 
-            if self._pro_mode and cost == "260":
-                # Pro 模式：跳過 260 幣強化（攻略：極少數情況才選 260）
-                self._pro_log(f"F{self._current_floor} 強化 費用={cost} → 跳過(Pro省幣)")
+            # 最終商店強化不限費用（幣帶不走）
+            max_cost = 65535 if self._is_final_room else self._strengthen_max_cost
+
+            if cost > max_cost:
+                print(f"[tower_loop] strengthen cost={cost} > max={max_cost}, skipping")
+                self._log(f"強化 費用={cost} → 跳過(超過上限{max_cost})")
+            elif cost == 65535:
+                print("[tower_loop] strengthen cost unreadable, skipping for safety")
             else:
-                if self._pro_mode:
-                    self._pro_log(f"F{self._current_floor} 強化 費用={cost} → 執行")
-                else:
-                    print(f"[tower_loop] strengthen cost={cost}, proceeding")
+                print(f"[tower_loop] strengthen cost={cost}, proceeding")
+                self._log(f"強化 費用={cost} → 執行")
                 self._click_hit(context, img, "塔_偵測_強化可用")
-                time.sleep(1.5)  # 等強化選卡 UI 打開或錯誤彈窗
-                # 若幣不夠（付費強化但幣為0），彈窗會出現，關掉即可
+                time.sleep(1.5)
                 img2 = context.tasker.controller.post_screencap().wait().get()
                 if self._hit(context, img2, "塔_商店_錢不夠"):
-                    if self._pro_mode:
-                        self._pro_log(f"F{self._current_floor} 強化 費用={cost} → 幣不夠，取消")
-                    else:
-                        print("[tower_loop] strengthen too expensive, dismissing")
+                    print(f"[tower_loop] strengthen cost={cost}, insufficient coins")
                     context.tasker.controller.post_click(640, 400).wait()
                     time.sleep(0.5)
 
@@ -358,12 +379,13 @@ class TowerLoopAction(CustomAction):
             self._handle_strengthen_card(context, img, priority_dict)
 
         elif state == "go_up":
-            self._shop_done_this_room = False      # 進入下一層，重置旗標
+            self._shop_done_this_room = False
             self._strengthen_done_this_room = False
+            self._is_final_room = False
             self._current_floor += 1
             print(f"[tower_loop] going up, now floor {self._current_floor}")
             self._click_hit(context, img, "塔_偵測_上樓")
-            time.sleep(2.0)  # 換層動畫較長
+            time.sleep(2.0)
 
         elif state == "final_leave":
             self._click_hit(context, img, "塔_偵測_最終離開")
@@ -377,18 +399,17 @@ class TowerLoopAction(CustomAction):
             print(f"[tower_loop] shop visit #{self._shop_visit_count}")
             completed = self._handle_shop_main(context, img)
             if completed:
-                self._shop_done_this_room = True  # 正常走完才標記，提前關閉（買buff後彈視窗）不標記
+                self._shop_done_this_room = True
 
         elif state == "dialogue":
             self._click_hit(context, img, "星塔_节点_对话")
-            time.sleep(1.0)  # 等對話動畫
+            time.sleep(1.0)
 
         elif state == "blank_close":
             self._click_hit(context, img, "塔_偵測_點選空白")
-            time.sleep(1.0)  # 等提示消失
+            time.sleep(1.0)
 
         elif state == "dialogue_ignore":
-            # 突發事件：點擊偵測到的選項按鈕
             self._click_hit(context, img, "塔_偵測_突發事件")
             time.sleep(1.0)
 
@@ -400,13 +421,6 @@ class TowerLoopAction(CustomAction):
             print("[tower_loop] backpack screen detected, pressing Android back key")
             context.tasker.controller.post_press_key(4).wait()
             time.sleep(1.5)
-
-    def _click_hit(self, context: Context, img, node: str):
-        """偵測節點並點擊命中位置的中心。"""
-        result = context.run_recognition(node, img)
-        if result and result.hit and result.best_result:
-            cx, cy = _box_center(result.best_result.box)
-            context.tasker.controller.post_click(cx, cy).wait()
 
     # ──────────────────────────────────────────────────────────────
     # Buff / 強化選卡
@@ -424,17 +438,20 @@ class TowerLoopAction(CustomAction):
 
     def _handle_strengthen_card(self, context: Context, img, priority_dict: Dict):
         """商店強化的潛能卡片選擇畫面。"""
-        # 無推薦圖示；同樣走 priority_dict，無命中就點最左卡
         self._select_card_and_take(context, img, priority_dict, fallback_box=None)
 
     def _find_priority_card(self, context: Context, img) -> Optional[Tuple]:
-        """掃描畫面上的卡牌，回傳最高優先命中的 box；無命中回傳 None。"""
-        # 由呼叫端傳入 priority_dict，這裡從 instance 變數讀取
+        """掃描畫面上的卡牌，回傳最高優先命中的 box；無命中回傳 None。
+
+        兩段式匹配：
+        - Pass 1: 精確 OCR expected 匹配（快速路徑）
+        - Pass 2: 讀取所有卡牌文字，正規化後雙向 substring 比對
+        """
+        # Pass 1: 精確匹配
         for priority in sorted(self._priority_dict.keys(), reverse=True):
             for target in self._priority_dict[priority]:
                 if context.tasker.stopping:
                     return None
-                print(f"[tower_loop] scanning priority {priority}: {target!r}")
                 reco = context.run_recognition(
                     "塔_OCR_卡牌區域",
                     img,
@@ -448,8 +465,42 @@ class TowerLoopAction(CustomAction):
                 )
                 if reco and reco.hit and reco.best_result:
                     box = reco.best_result.box
-                    print(f"[tower_loop] found {target!r} at {box}")
+                    print(f"[tower_loop] found {target!r} (exact) at {box}")
                     return box
+
+        # Pass 2: 模糊匹配 — 讀取所有卡牌文字，用 substring 比對
+        all_text_reco = context.run_recognition(
+            "塔_OCR_卡牌區域",
+            img,
+            pipeline_override={
+                "塔_OCR_卡牌區域": {
+                    "recognition": "OCR",
+                    "expected": ".+",
+                    "action": "DoNothing",
+                }
+            },
+        )
+        if not (all_text_reco and all_text_reco.hit):
+            return None
+
+        results = getattr(all_text_reco, "filtered_results", None) or []
+        if all_text_reco.best_result:
+            results = [all_text_reco.best_result] + [r for r in results if r != all_text_reco.best_result]
+
+        for result in results:
+            ocr_text = getattr(result, "text", "")
+            ocr_norm = _normalize_name(ocr_text)
+            if len(ocr_norm) < 2:
+                continue
+            for priority in sorted(self._priority_dict.keys(), reverse=True):
+                for target in self._priority_dict[priority]:
+                    target_norm = _normalize_name(target)
+                    if len(target_norm) < 2:
+                        continue
+                    if target_norm in ocr_norm or ocr_norm in target_norm:
+                        print(f"[tower_loop] found {target!r} (fuzzy: '{ocr_text}') at {result.box}")
+                        return result.box
+
         return None
 
     def _try_reroll_buff(self, context: Context) -> bool:
@@ -457,13 +508,12 @@ class TowerLoopAction(CustomAction):
         img = context.tasker.controller.post_screencap().wait().get()
         result = context.run_recognition("塔_buff_重置按鈕", img)
         if result and result.hit and result.best_result:
-            # OCR 命中的是幣數數字，圓形按鈕在其正上方約 25px
             bx, by, bw, bh = result.best_result.box
             cx, cy = bx + bw // 2, by - 25
             context.tasker.controller.post_click(cx, cy).wait()
             print(f"[tower_loop] buff reroll clicked at ({cx}, {cy})")
             return True
-        # fallback 固定座標（右下角按鈕位置）
+        # fallback 固定座標
         print("[tower_loop] buff reroll OCR failed, fallback click (1210, 635)")
         context.tasker.controller.post_click(1210, 635).wait()
         return True
@@ -478,42 +528,21 @@ class TowerLoopAction(CustomAction):
         """掃描 priority_dict，點最高優先卡，再點拿走。
         若無命中且有優先清單，最多重置 2 次後再選。
         """
-        self._priority_dict = priority_dict  # 供 _find_priority_card 使用
-        MAX_BUFF_REROLLS = 1 if self._pro_mode else 2
+        self._priority_dict = priority_dict
+        MAX_BUFF_REROLLS = 2
         reroll_count = 0
 
         while True:
             target_box = self._find_priority_card(context, img)
 
             if target_box is not None:
-                break  # 找到優先卡，直接選
+                break
 
-            # 無命中：判斷是否觸發重置
-            should_reroll = False
             if priority_dict and reroll_count < MAX_BUFF_REROLLS:
-                if self._pro_mode:
-                    # Pro 模式：只有 P3 全未命中才重置
-                    p3_list = priority_dict.get(3, [])
-                    if p3_list:
-                        saved = self._priority_dict
-                        self._priority_dict = {3: p3_list}
-                        p3_hit = self._find_priority_card(context, img)
-                        self._priority_dict = saved
-                        if p3_hit is None:
-                            should_reroll = True
-                            print("[tower_loop] PRO: no P3 found, triggering reroll")
-                        else:
-                            print("[tower_loop] PRO: P3 hit found, skip reroll")
-                    # 無 P3 清單 → 不觸發重置
-                else:
-                    # 一般模式：任何未命中就重置
-                    should_reroll = True
-
-            if should_reroll:
                 print(f"[tower_loop] no priority match, rerolling buff ({reroll_count + 1}/{MAX_BUFF_REROLLS})")
                 self._try_reroll_buff(context)
                 reroll_count += 1
-                time.sleep(1.5)  # 等新卡動畫
+                time.sleep(1.5)
                 img = context.tasker.controller.post_screencap().wait().get()
                 continue
 
@@ -528,7 +557,7 @@ class TowerLoopAction(CustomAction):
 
         cx, cy = _box_center(target_box)
         context.tasker.controller.post_click(cx, cy).wait()
-        time.sleep(1.0)  # 等選卡高亮動畫完成
+        time.sleep(1.0)
 
         # 點拿走
         img2 = context.tasker.controller.post_screencap().wait().get()
@@ -540,7 +569,7 @@ class TowerLoopAction(CustomAction):
         else:
             print("[tower_loop] 拿走 not found, fallback click at fixed position")
             context.tasker.controller.post_click(335, 710).wait()
-        time.sleep(1.5)  # 等取得 buff 動畫完成
+        time.sleep(1.5)
 
     # ──────────────────────────────────────────────────────────────
     # 商店
@@ -548,8 +577,12 @@ class TowerLoopAction(CustomAction):
 
     def _handle_shop_node(self, context: Context, img):
         """商店節點選擇畫面：點「商店購物」進入購物。"""
+        # 偵測是否為最終商店（同一畫面出現「離開星塔」而非「上樓」）
+        if self._hit(context, img, "塔_偵測_最終離開"):
+            self._is_final_room = True
+            print("[tower_loop] final room detected (離開星塔 visible)")
         self._click_hit(context, img, "塔_偵測_商店節點")
-        time.sleep(2.0)  # 等商店主界面打開
+        time.sleep(2.0)
 
     def _handle_shop_main(self, context: Context, img) -> bool:
         """商店主界面：掃描 8 格，買有折扣的 buff / 音符；幣多則重置繼續買。
@@ -562,7 +595,6 @@ class TowerLoopAction(CustomAction):
             items_bought = 0
             shop_closed_early = False
             for grid_idx, roi in _GRID_ROIS.items():
-                # 每格前重新截圖，確認仍在商店主界面
                 current_img = context.tasker.controller.post_screencap().wait().get()
                 if not self._hit(context, current_img, "塔_偵測_商店主界面"):
                     print(f"[tower_loop] shop main gone at grid {grid_idx}")
@@ -572,21 +604,16 @@ class TowerLoopAction(CustomAction):
                     items_bought += 1
 
             if shop_closed_early:
-                return False  # 商店已自動關閉，交由主迴圈處理
+                return False
 
-            # 本輪掃完：嘗試重置（幣帶不走，積極花）
             if reroll_round < 2 and self._try_reroll_shop(context):
-                if self._pro_mode:
-                    self._pro_log(f"F{self._current_floor} 商店第{reroll_round + 1}輪結束：買{items_bought}件 → 刷新繼續")
-                else:
-                    print(f"[tower_loop] shop rerolled (round {reroll_round + 1}, bought {items_bought})")
-                time.sleep(1.5)  # 等重置動畫
+                print(f"[tower_loop] shop rerolled (round {reroll_round + 1}, bought {items_bought})")
+                self._log(f"商店第{reroll_round + 1}輪結束：買{items_bought}件 → 刷新繼續")
+                time.sleep(1.5)
             else:
-                if self._pro_mode:
-                    self._pro_log(f"F{self._current_floor} 商店結束：第{reroll_round + 1}輪 買{items_bought}件 → 離開")
-                else:
-                    print(f"[tower_loop] shop done (round {reroll_round}, bought {items_bought})")
-                break  # 沒東西買或無法重置，結束
+                print(f"[tower_loop] shop done (round {reroll_round + 1}, bought {items_bought})")
+                self._log(f"商店結束：第{reroll_round + 1}輪 買{items_bought}件 → 離開")
+                break
 
         time.sleep(0.5)
         self._exit_shop_main(context)
@@ -601,22 +628,11 @@ class TowerLoopAction(CustomAction):
 
         img = context.tasker.controller.post_screencap().wait().get()
 
-        if self._pro_mode:
-            # Pro 模式：前期不刷新（刷一次等於虧一個潛能），後期有餘力才刷
-            reroll_floor = self._config.get("reroll_from_floor", 10)
-            tier = self._coin_tier(context, img)
-            if self._current_floor < reroll_floor:
-                self._pro_log(f"F{self._current_floor} 商店刷新 幣={tier} → 跳過(前期省幣, 門檻F{reroll_floor})")
-                return False
-            # 後期樓層：幣 >= 650 才刷
-            if not self._hit(context, img, "塔_商店_幣數六五零以上"):
-                self._pro_log(f"F{self._current_floor} 商店刷新 幣={tier} → 跳過(幣不足650)")
-                return False
-            self._pro_log(f"F{self._current_floor} 商店刷新 幣={tier} → 執行")
-        else:
-            if self._shop_visit_count <= 2 and not self._hit(context, img, "塔_商店_幣數六五零以上"):
-                print(f"[tower_loop] shop reroll skipped: visit #{self._shop_visit_count} coins < 650")
-                return False
+        # 幣數不足 650 不刷新（刷新本身要花幣，刷出來的也買不起）
+        coins = self._read_coin_amount(context, img)
+        if coins < 650:
+            print(f"[tower_loop] shop reroll skipped: coins={coins} < 650")
+            return False
 
         result = context.run_recognition("塔_商店_重置按鈕", img)
         if not (result and result.hit and result.best_result):
@@ -627,7 +643,6 @@ class TowerLoopAction(CustomAction):
         context.tasker.controller.post_click(cx, cy).wait()
         time.sleep(1.0)
 
-        # 檢查是否出現「無法重置」或「錢不夠」彈窗
         img2 = context.tasker.controller.post_screencap().wait().get()
         if self._hit(context, img2, "塔_商店_無法重置") or self._hit(context, img2, "塔_商店_錢不夠"):
             print("[tower_loop] reroll failed (no coins or no rerolls left)")
@@ -641,68 +656,76 @@ class TowerLoopAction(CustomAction):
         """點擊一個商店格子，判斷是否購買。回傳 True 表示成功購買。"""
         cx, cy = roi[0] + roi[2] // 2, roi[1] + roi[3] // 2
         context.tasker.controller.post_click(cx, cy).wait()
-        time.sleep(0.8)  # 等詳情面板滑入
+        time.sleep(0.8)
 
         img = context.tasker.controller.post_screencap().wait().get()
 
         # 售罄 → 跳過
         if self._hit(context, img, "塔_商店_售罄"):
-            print(f"[tower_loop] grid {grid_idx}: sold out")
+            self._log(f"格{grid_idx} 售罄")
             return False
 
         # 錢不夠 → 跳過
         if self._hit(context, img, "塔_商店_錢不夠"):
-            print(f"[tower_loop] grid {grid_idx}: insufficient funds")
+            self._log(f"格{grid_idx} 錢不夠")
             return False
 
         # 沒有打開詳情面板 → 跳過
         if not self._hit(context, img, "塔_商店_購買按鈕"):
-            print(f"[tower_loop] grid {grid_idx}: no detail panel")
             return False
 
         is_buff = self._hit(context, img, "塔_商店_buff類型")
         is_note = (not is_buff) and self._hit(context, img, "塔_商店_音符類型")
-
         has_discount = self._hit(context, img, "塔_商店_優惠")
 
         if is_buff:
-            if self._pro_mode:
-                # Pro 模式：積極買潛能（打折 + 原價 200 都買），多買潛能是養成關鍵
-                tier = self._coin_tier(context, img)
-                price_tag = "折扣" if has_discount else "原價"
-                self._pro_log(f"F{self._current_floor} 格{grid_idx} 潛能({price_tag}) 幣={tier} → 購買")
+            if self._is_final_room or has_discount:
+                # 最終商店或有折扣：直接買
+                print(f"[tower_loop] grid {grid_idx}: buff ({'final' if self._is_final_room else 'discounted'}), buying")
                 self._do_buy(context)
                 return True
-            # 一般模式：有折扣才買（無折扣要200幣，不划算）
-            if has_discount:
-                print(f"[tower_loop] grid {grid_idx}: buff (discounted), buying")
-                self._do_buy(context)
-                return True
-            print(f"[tower_loop] grid {grid_idx}: buff (no discount), skip")
-            self._close_detail(context, img)
-            return False
+
+            # 無折扣：檢查幣數是否充裕（>預留值+200，200 為 buff 原價）
+            if not self._strengthen_done_this_room and self._strengthen_reserve > 0:
+                coins = self._read_coin_amount(context, img)
+                if coins > 0 and coins - 200 < self._strengthen_reserve:
+                    print(f"[tower_loop] grid {grid_idx}: buff (no discount), coins={coins} < reserve+200, skip")
+                    self._log(f"格{grid_idx} 潛能(原價) 幣={coins} → 跳過(預留{self._strengthen_reserve})")
+                    self._close_detail(context, img)
+                    return False
+
+            # 無折扣但幣充裕 → 也買（潛能是養成關鍵）
+            print(f"[tower_loop] grid {grid_idx}: buff (no discount, coins sufficient), buying")
+            self._do_buy(context)
+            return True
 
         if is_note:
-            if self._pro_mode:
-                # Pro 模式：完全不買音符（音符提升小，目標是湊 6 個 Lv1 技能觸發）
-                tier = self._coin_tier(context, img)
-                is_activated = self._hit(context, img, "塔_商店_音符激活")
-                activated_tag = "已激活" if is_activated else "未激活"
-                discount_tag = "折扣" if has_discount else "原價"
-                self._pro_log(f"F{self._current_floor} 格{grid_idx} 音符({activated_tag}/{discount_tag}) 幣={tier} → 跳過(Pro不買音符)")
-                self._close_detail(context, img)
-                return False
-            # 一般模式：只買已激活的音符；未激活的沒有效益
             is_activated = self._hit(context, img, "塔_商店_音符激活")
+
+            if self._is_final_room and is_activated:
+                # 最終商店：已激活音符也買（幣帶不走）
+                print(f"[tower_loop] grid {grid_idx}: activated note (final room), buying")
+                self._do_buy(context)
+                return True
+
             if not is_activated:
-                print(f"[tower_loop] grid {grid_idx}: unactivated note, skip")
+                self._log(f"格{grid_idx} 音符(未激活) → 跳過")
                 self._close_detail(context, img)
                 return False
+
+            # 已激活音符：檢查幣數預留
+            if not self._strengthen_done_this_room and self._strengthen_reserve > 0:
+                coins = self._read_coin_amount(context, img)
+                if coins > 0 and coins - 100 < self._strengthen_reserve:
+                    print(f"[tower_loop] grid {grid_idx}: activated note, coins={coins} < reserve+100, skip")
+                    self._close_detail(context, img)
+                    return False
+
             print(f"[tower_loop] grid {grid_idx}: activated note, buying")
             self._do_buy(context)
             return True
 
-        print(f"[tower_loop] grid {grid_idx}: skip (not buff or note)")
+        self._log(f"格{grid_idx} 非潛能/音符 → 跳過")
         self._close_detail(context, img)
         return False
 
@@ -713,14 +736,12 @@ class TowerLoopAction(CustomAction):
         if result and result.hit and result.best_result:
             cx, cy = _box_center(result.best_result.box)
             context.tasker.controller.post_click(cx, cy).wait()
-            time.sleep(1.5)  # 等購買動畫完成
-            # 確認後可能出現的彈窗
+            time.sleep(1.5)
             img2 = context.tasker.controller.post_screencap().wait().get()
             if self._hit(context, img2, "塔_商店_錢不夠"):
                 context.tasker.controller.post_click(640, 400).wait()
                 time.sleep(0.5)
             elif self._hit(context, img2, "塔_偵測_點選空白"):
-                # 購買後出現「點選空白處繼續」提示（如拿到新 buff 時）
                 self._click_hit(context, img2, "塔_偵測_點選空白")
                 time.sleep(1.0)
 
@@ -731,9 +752,8 @@ class TowerLoopAction(CustomAction):
             cx, cy = _box_center(result.best_result.box)
             context.tasker.controller.post_click(cx, cy).wait()
         else:
-            # 備用：點空白區域
             context.tasker.controller.post_click(471 + 335 // 2, 486 + 216 // 2).wait()
-        time.sleep(0.6)  # 等詳情面板收起
+        time.sleep(0.6)
 
     def _exit_shop_main(self, context: Context):
         """從商店主界面返回選擇畫面。"""
@@ -742,9 +762,8 @@ class TowerLoopAction(CustomAction):
         if result and result.hit and result.best_result:
             cx, cy = _box_center(result.best_result.box)
             context.tasker.controller.post_click(cx, cy).wait()
-            time.sleep(2.0)  # 等返回動畫
+            time.sleep(2.0)
             return
-        # 備用：點左上角返回箭頭的固定座標
         context.tasker.controller.post_click(50, 35).wait()
         time.sleep(2.0)
 
@@ -753,9 +772,24 @@ class TowerLoopAction(CustomAction):
     # ──────────────────────────────────────────────────────────────
 
     def _handle_dialogue_option(self, context: Context, img):
-        """點擊識別到的對話選項文字。"""
+        """點擊識別到的對話選項文字。若 OCR 失敗則 fallback。"""
         result = context.run_recognition("塔_偵測_對話選項", img)
         if result and result.hit and result.best_result:
             cx, cy = _box_center(result.best_result.box)
             context.tasker.controller.post_click(cx, cy).wait()
-            time.sleep(0.5)  # 對話選項通常快速響應，多頁劇情也能快速點完
+            time.sleep(0.5)
+            return
+
+        # Fallback 1: 使用突發事件的模板按鈕偵測（藍色圓圈按鈕）
+        event_result = context.run_recognition("塔_偵測_突發事件", img)
+        if event_result and event_result.hit and event_result.best_result:
+            cx, cy = _box_center(event_result.best_result.box)
+            context.tasker.controller.post_click(cx, cy).wait()
+            print("[tower_loop] dialogue_option OCR failed, used template fallback")
+            time.sleep(0.5)
+            return
+
+        # Fallback 2: 固定座標點擊第一個對話選項位置
+        print("[tower_loop] dialogue_option all fallbacks, clicking fixed position (785, 280)")
+        context.tasker.controller.post_click(785, 280).wait()
+        time.sleep(0.5)

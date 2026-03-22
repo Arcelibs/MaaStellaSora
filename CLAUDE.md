@@ -76,31 +76,50 @@ Fork 自 [MaaStellaSora/MaaStellaSora](https://github.com/MaaStellaSora/MaaStell
 
 | 商品類型 | 購買條件 |
 |---|---|
-| Buff（潛能特飲等） | 有折扣才買（無折扣 200 幣不划算） |
-| 已激活音符 | 直接買 |
+| Buff（潛能特飲等） | 有折扣直接買；無折扣但幣數充裕（>預留值+200）也買 |
+| 已激活音符 | 幣數充裕時買（>預留值+100） |
 | 未激活音符 | 跳過 |
 | 其他 | 跳過 |
+| 最終商店 | Buff 無論折扣都買，已激活音符也買（幣帶不走） |
 
-商店重置：掃完一輪後最多重置 2 次。`skip_shop_rerolls` 設定跳過前 N 次商店的重置。
+商店重置：掃完一輪後最多重置 2 次。`skip_shop_rerolls` 設定跳過前 N 次商店的重置。幣數 < 650 不刷新。
+
+### 強化策略
+
+- 費用 ≤ `strengthen_max_cost`（預設 180）→ 執行
+- 費用超過上限 → 跳過
+- OCR 讀取失敗 → 安全跳過（回傳 65535）
+- 最終商店強化不限費用
 
 ### Buff 選卡策略
 
 - 按 priority 3 → 2 → 1 掃描，找到就選
+- 兩段式匹配：精確 OCR → 模糊 substring（容忍 OCR 錯字）
 - 全部不在清單內且有設定優先級 → 最多重置 2 次（花幣）再掃
 - 沒有設定 preset 或重置後仍無命中 → 選推薦圖示（fallback）
+
+### 對話選項
+
+- OCR 匹配已知對話文字 → 點擊
+- OCR 失敗 → fallback 到突發事件模板按鈕 → 固定座標
 
 ### Preset 格式
 
 ```json
 {
     "config": {
-        "skip_shop_rerolls": 1
+        "skip_shop_rerolls": 1,
+        "strengthen_max_cost": 180,
+        "strengthen_reserve": 180,
+        "verbose_log": false
     },
     "3": ["最高優先Buff1", "最高優先Buff2"],
     "2": ["次要Buff1"],
     "1": ["備選Buff1"]
 }
 ```
+
+所有 config 欄位都是可選的，有合理預設值。
 
 ### 現有 Preset 作業
 

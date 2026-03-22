@@ -452,5 +452,17 @@
         },
         "action": {"type": "DoNothing"},
         "timeout": 1000
+    },
+
+    "塔_OCR_幣數": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": ["\\d+"],
+                "replace": [[",", ""]],
+                "roi": [1100, 40, 180, 45]
+            }
+        },
+        "action": {"type": "DoNothing"}
     }
 }
